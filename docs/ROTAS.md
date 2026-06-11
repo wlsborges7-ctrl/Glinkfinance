@@ -30,3 +30,11 @@ GET  /api/lancamentos                   Lançamentos JSON
 GET  /export/lancamentos.csv            Exportação CSV
 GET  /uploads/:arquivo                  Arquivos enviados
 ```
+
+
+## Rotas adicionadas na v0.4
+
+```txt
+GET /graficos       Área de gráficos gerenciais
+GET /api/graficos   Dados JSON para gráficos e indicadores
+```

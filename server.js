@@ -233,7 +233,7 @@ function opts(list, selected='', blank=true) {
 }
 function nav(active) {
   const links = [
-    ['/', 'Dashboard', 'dashboard'], ['/lancamentos','Lançamentos','lancamentos'], ['/reservas','Reservas','reservas'], ['/emprestimos','Empréstimos/Devoluções','emprestimos'], ['/rateios','Rateios','rateios'], ['/relatorios','Relatórios','relatorios'], ['/parametrizacao','Parametrização','parametrizacao']
+    ['/', 'Dashboard', 'dashboard'], ['/graficos','Gráficos','graficos'], ['/lancamentos','Lançamentos','lancamentos'], ['/reservas','Reservas','reservas'], ['/emprestimos','Empréstimos/Devoluções','emprestimos'], ['/rateios','Rateios','rateios'], ['/relatorios','Relatórios','relatorios'], ['/parametrizacao','Parametrização','parametrizacao']
   ];
   return `<aside class="sidebar"><div class="brand">Glink<span>Finance</span><small>ISP</small></div><nav class="nav">${links.map(([href,label,key])=>`<a class="${active===key?'active':''}" href="${href}">${label}</a>`).join('')}</nav></aside>`;
 }
@@ -319,12 +319,89 @@ function calcularDashboard(db) {
 
 function renderDashboard(db) {
   const d = calcularDashboard(db), m = maps(db);
-  const prox = d.proximos.map(l=>`<tr><td><strong>${esc(l.descricao)}</strong><br><small>${esc(m.credores[l.credorDevedorId]?.nome || '-')}</small></td><td>${esc(m.unidades[l.unidadeNegocioId]?.nome || '-')}</td><td><span class="${tipoClass(l.tipo)}">${tipoLabel(l.tipo)}</span></td><td>${monthBR(l.competencia)}</td><td>${dateBR(l.vencimento)}</td><td><span class="badge ${badge(l.status)}">${statusLabel(l.status,l.tipo)}</span></td><td class="right">${brl(l.valorProvisionado)}</td></tr>`).join('');
-  return layout('Dashboard','dashboard', header('Dashboard','Visão financeira gerencial do GlinkFinance para ISP.', '<a class="btn" href="/lancamentos/novo">Novo lançamento</a>') +
-  `<div class="metrics">${cardMetric('Receitas provisionadas', brl(d.entradas), 'positive')}${cardMetric('Despesas provisionadas', brl(d.despesas), 'negative')}${cardMetric('Saldo previsto', brl(d.saldoPrevisto), d.saldoPrevisto>=0?'positive':'negative')}${cardMetric('Pago/recebido', brl(d.saldoRealizado), d.saldoRealizado>=0?'positive':'negative')}${cardMetric('A vencer/em aberto', brl(d.abertoReceita - d.abertoDespesa), '')}${cardMetric('Vencido', brl(d.vencido), 'negative')}${cardMetric('Margem operacional', pct(d.margemLucro), d.margemLucro>=0?'positive':'negative')}${cardMetric('Reservas', brl(d.reservasSaldo), 'positive')}</div>
-  <div class="grid grid-2"><div class="card"><h3>Próximos lançamentos</h3><table><thead><tr><th>Lançamento</th><th>Unidade</th><th>Tipo</th><th>Competência</th><th>Vencimento</th><th>Status</th><th class="right">Valor</th></tr></thead><tbody>${prox || '<tr><td colspan="7">Sem lançamentos pendentes.</td></tr>'}</tbody></table></div><div class="card"><h3>Resultado por unidade de negócio</h3><table><tbody>${tableRows(d.porUnidade)}</tbody></table></div></div>`);
+  const prox = d.proximos.slice(0,7).map(l=>`<tr><td><strong>${esc(l.descricao)}</strong><br><small>${esc(m.credores[l.credorDevedorId]?.nome || '-')}</small></td><td>${esc(m.unidades[l.unidadeNegocioId]?.nome || '-')}</td><td><span class="${tipoClass(l.tipo)}">${tipoLabel(l.tipo)}</span></td><td class="nowrap">${dateBR(l.vencimento)}</td><td><span class="badge ${badge(l.status)}">${statusLabel(l.status,l.tipo)}</span></td><td class="right nowrap">${brl(l.valorProvisionado)}</td></tr>`).join('');
+  return layout('Dashboard','dashboard', header('Dashboard','Visão executiva do GlinkFinance para ISP, com cards mais compactos e leitura rápida.', '<a class="btn secondary" href="/graficos">Ver gráficos</a><a class="btn" href="/lancamentos/novo">Novo lançamento</a>') +
+  `<section class="hero-card">
+    <div class="hero-value"><span>Saldo previsto</span><strong class="${d.saldoPrevisto>=0?'positive':'negative'}">${brl(d.saldoPrevisto)}</strong><small class="muted">Receitas provisionadas menos despesas provisionadas.</small></div>
+    <div class="hero-list">
+      <div class="hero-item"><span>Receitas</span><strong class="positive">${brl(d.entradas)}</strong></div>
+      <div class="hero-item"><span>Despesas</span><strong class="negative">${brl(d.despesas)}</strong></div>
+      <div class="hero-item"><span>Realizado</span><strong class="${d.saldoRealizado>=0?'positive':'negative'}">${brl(d.saldoRealizado)}</strong></div>
+      <div class="hero-item"><span>Vencido</span><strong class="negative">${brl(d.vencido)}</strong></div>
+    </div>
+  </section>
+  <div class="metrics metrics-compact">${cardMetric('Em aberto', brl(d.abertoReceita - d.abertoDespesa), '')}${cardMetric('Recebido', brl(d.recebido), 'positive')}${cardMetric('Pago', brl(d.pago), 'negative')}${cardMetric('Margem operacional', pct(d.margemLucro), d.margemLucro>=0?'positive':'negative')}${cardMetric('Reservas', brl(d.reservasSaldo), 'positive')}${cardMetric('Empréstimos em aberto', brl(d.emprestimosAberto), 'negative')}</div>
+  <div class="grid grid-2 dashboard-row"><div class="card"><h3>Próximos lançamentos</h3><div class="table-wrap"><table class="dashboard-table"><thead><tr><th>Lançamento</th><th>Unidade</th><th>Tipo</th><th>Vencimento</th><th>Status</th><th class="right">Valor</th></tr></thead><tbody>${prox || '<tr><td colspan="6">Sem lançamentos pendentes.</td></tr>'}</tbody></table></div></div><div class="card"><h3>Resultado por unidade de negócio</h3><div class="table-wrap"><table class="dashboard-table"><tbody>${tableRows(d.porUnidade)}</tbody></table></div></div></div>`);
 }
 function tableRows(obj) { return Object.entries(obj).sort((a,b)=>Math.abs(b[1])-Math.abs(a[1])).map(([k,v])=>`<tr><td>${esc(k)}</td><td class="right ${v>=0?'positive':'negative'}">${brl(v)}</td></tr>`).join('') || '<tr><td>Sem dados.</td><td></td></tr>'; }
+
+function clamp(n, min=0, max=100) { return Math.max(min, Math.min(max, Number.isFinite(n) ? n : 0)); }
+function topEntries(obj, limit=8, absolute=true) {
+  return Object.entries(obj || {}).sort((a,b)=>absolute ? Math.abs(b[1])-Math.abs(a[1]) : b[1]-a[1]).slice(0, limit);
+}
+function horizontalChart(title, subtitle, entries, opts={}) {
+  const rows = (entries || []).filter(([,v])=>Number.isFinite(num(v)) && Math.abs(num(v)) > 0);
+  if (!rows.length) return `<div class="chart-card"><h3>${esc(title)}</h3><p class="chart-subtitle">${esc(subtitle)}</p><div class="chart-empty">Sem dados suficientes para montar o gráfico.</div></div>`;
+  const max = Math.max(...rows.map(([,v])=>Math.abs(num(v))), 1);
+  return `<div class="chart-card ${opts.wide?'wide':''}"><h3>${esc(title)}</h3><p class="chart-subtitle">${esc(subtitle)}</p>${rows.map(([label,value])=>{ const val=num(value); const width=clamp(Math.abs(val)*100/max); const cls=opts.neutral?'chart-neutral':(val>=0?'chart-positive':'chart-negative'); return `<div class="chart-row"><div class="chart-label" title="${esc(label)}">${esc(label)}</div><div class="chart-track"><div class="chart-fill ${cls}" style="width:${width}%"></div></div><div class="chart-value ${val>=0?'positive':'negative'}">${brl(val)}</div></div>`; }).join('')}</div>`;
+}
+function receitaDespesaPorCompetencia(db) {
+  const grupos = {};
+  for (const l of db.lancamentos.filter(isValidLancamento)) {
+    const key = l.competencia || 'Sem competência';
+    grupos[key] ||= { competencia:key, receita:0, despesa:0, lucro:0 };
+    if (l.tipo === 'receita') grupos[key].receita += num(l.valorProvisionado);
+    else grupos[key].despesa += num(l.valorProvisionado);
+    grupos[key].lucro = grupos[key].receita - grupos[key].despesa;
+  }
+  return Object.values(grupos).sort((a,b)=>String(a.competencia).localeCompare(String(b.competencia)));
+}
+function seriesCompetenciaChart(db) {
+  const rows = receitaDespesaPorCompetencia(db);
+  if (!rows.length) return `<div class="chart-card wide"><h3>Receitas x despesas por competência</h3><p class="chart-subtitle">Comparativo mensal entre valores provisionados.</p><div class="chart-empty">Sem dados suficientes para montar o gráfico.</div></div>`;
+  const max = Math.max(...rows.flatMap(r=>[r.receita, r.despesa, Math.abs(r.lucro)]), 1);
+  return `<div class="chart-card wide"><h3>Receitas x despesas por competência</h3><p class="chart-subtitle">Comparativo mensal entre receitas, despesas e resultado provisionado.</p><div class="chart-legend"><span><i class="legend-dot dot-receita"></i>Receita</span><span><i class="legend-dot dot-despesa"></i>Despesa</span><span><i class="legend-dot dot-lucro"></i>Lucro/resultado</span></div><div class="chart-series">${rows.map(r=>`<div class="series-block"><div class="series-label">${monthBR(r.competencia)}</div><div class="series-bars"><div class="series-track"><div class="chart-fill chart-positive" style="width:${clamp(r.receita*100/max)}%"></div></div><div class="series-track"><div class="chart-fill chart-negative" style="width:${clamp(r.despesa*100/max)}%"></div></div><div class="series-track"><div class="chart-fill chart-neutral" style="width:${clamp(Math.abs(r.lucro)*100/max)}%"></div></div></div><div class="series-value ${r.lucro>=0?'positive':'negative'}">${brl(r.lucro)}</div></div>`).join('')}</div></div>`;
+}
+function despesaPorCentro(db) {
+  const m = maps(db), out = {};
+  for (const l of db.lancamentos.filter(l=>isValidLancamento(l) && l.tipo === 'despesa')) {
+    const k = m.centros[l.centroCustoId]?.nome || 'Sem centro';
+    out[k] = (out[k] || 0) + num(l.valorProvisionado);
+  }
+  return out;
+}
+function statusChart(db) {
+  const validos = db.lancamentos.filter(isValidLancamento);
+  const out = {};
+  for (const l of validos) out[statusLabel(l.status,l.tipo)] = (out[statusLabel(l.status,l.tipo)] || 0) + 1;
+  const boxes = Object.entries(out).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<div class="status-box"><span>${esc(k)}</span><strong>${v}</strong></div>`).join('');
+  return `<div class="chart-card"><h3>Status dos lançamentos</h3><p class="chart-subtitle">Quantidade de lançamentos por situação.</p><div class="status-grid">${boxes || '<div class="chart-empty">Sem lançamentos.</div>'}</div></div>`;
+}
+function tetoChart(db) {
+  const m = maps(db);
+  const rows = db.referencias.map(ref => {
+    const gasto = db.lancamentos.filter(l=>isValidLancamento(l) && l.tipo==='despesa' && l.referenciaId===ref.id).reduce((s,l)=>s+num(l.valorProvisionado),0);
+    const teto = num(ref.tetoGasto);
+    const uso = teto > 0 ? gasto * 100 / teto : 0;
+    const b = tetoBadge(teto > 0 ? uso : NaN);
+    return { ref, gasto, teto, uso, b };
+  }).filter(x=>x.teto > 0 || x.gasto > 0).sort((a,b)=>b.uso-a.uso).slice(0,10);
+  if (!rows.length) return `<div class="chart-card wide"><h3>Teto de gasto por referência</h3><p class="chart-subtitle">Uso do limite configurado em parametrização.</p><div class="chart-empty">Sem tetos configurados ou despesas vinculadas.</div></div>`;
+  return `<div class="chart-card wide"><h3>Teto de gasto por referência</h3><p class="chart-subtitle">Sinalização: verde até 75%, amarelo até 100% e vermelho acima do teto.</p>${rows.map(x=>{ const cls=x.uso<=75?'chart-positive':(x.uso<=100?'chart-warning':'chart-negative'); return `<div class="progress-line"><div class="progress-meta"><strong>${esc(x.ref.nome)}</strong><small>${esc(m.centros[x.ref.centroCustoId]?.nome || '-')} / ${esc(m.planos[x.ref.planoContaId]?.nome || '-')}</small></div><div class="progress-track"><div class="progress-fill ${cls}" style="width:${clamp(x.uso)}%"></div></div><div class="progress-number">${pct(x.uso)}</div><div><span class="badge ${x.b.cls}">${x.b.label}</span></div></div>`;}).join('')}</div>`;
+}
+function renderGraficos(db) {
+  const d = calcularDashboard(db);
+  return layout('Gráficos','graficos', header('Gráficos','Indicadores visuais para apresentação e leitura gerencial do ISP.', '<a class="btn" href="/relatorios">Ver relatórios</a>') +
+  `<div class="metrics metrics-compact">${cardMetric('Receitas', brl(d.entradas), 'positive')}${cardMetric('Despesas', brl(d.despesas), 'negative')}${cardMetric('Resultado previsto', brl(d.saldoPrevisto), d.saldoPrevisto>=0?'positive':'negative')}${cardMetric('Margem operacional', pct(d.margemLucro), d.margemLucro>=0?'positive':'negative')}${cardMetric('Reservas', brl(d.reservasSaldo), 'positive')}${cardMetric('Vencido', brl(d.vencido), 'negative')}</div>
+  <div class="chart-grid">
+    ${seriesCompetenciaChart(db)}
+    ${horizontalChart('Despesas por centro de custo','Total provisionado em despesas, por centro.', topEntries(despesaPorCentro(db), 8, false), {neutral:true})}
+    ${horizontalChart('Resultado por unidade de negócio','Receitas menos despesas por unidade.', topEntries(d.porUnidade, 8), {})}
+    ${horizontalChart('Rateio por filial','Resultado líquido dos rateios por filial.', topEntries(d.porFilial, 8), {})}
+    ${statusChart(db)}
+    ${tetoChart(db)}
+  </div>`);
+}
 
 function renderLancamentos(db) {
   const m = maps(db);
@@ -480,6 +557,7 @@ async function handle(req,res) {
   const db = readDb();
   try {
     if (req.method==='GET' && p==='/') return send(res,200,renderDashboard(db));
+    if (req.method==='GET' && p==='/graficos') return send(res,200,renderGraficos(db));
     if (req.method==='GET' && p==='/lancamentos') return send(res,200,renderLancamentos(db));
     if (req.method==='GET' && p==='/lancamentos/novo') return send(res,200,renderNovoLancamento(db));
     if (req.method==='GET' && p==='/rateios') return send(res,200,renderRateios(db));
@@ -488,6 +566,7 @@ async function handle(req,res) {
     if (req.method==='GET' && p==='/relatorios') return send(res,200,renderRelatorios(db));
     if (req.method==='GET' && p==='/parametrizacao') return send(res,200,renderParametrizacao(db));
     if (req.method==='GET' && p==='/api/dashboard') return send(res,200,JSON.stringify(calcularDashboard(db),null,2),'application/json; charset=utf-8');
+    if (req.method==='GET' && p==='/api/graficos') return send(res,200,JSON.stringify({dashboard:calcularDashboard(db), competencias:receitaDespesaPorCompetencia(db)},null,2),'application/json; charset=utf-8');
     if (req.method==='GET' && p==='/api/lancamentos') return send(res,200,JSON.stringify(db.lancamentos,null,2),'application/json; charset=utf-8');
     if (req.method==='GET' && p==='/export/lancamentos.csv') { res.writeHead(200, {'Content-Type':'text/csv; charset=utf-8','Content-Disposition':'attachment; filename="glinkfinance-lancamentos.csv"'}); return res.end(csv(db)); }
     const baixarGet = p.match(/^\/lancamentos\/([^/]+)\/baixar$/);

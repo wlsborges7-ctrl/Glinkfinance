@@ -1,4 +1,4 @@
-# GlinkFinance MVP v0.3
+# GlinkFinance MVP v0.4
 
 Sistema de gestão financeira com foco em ISP's, estruturado para controlar receitas, despesas, competência, vencimento, rateios entre filiais, classificações, reservas, empréstimos/devoluções e anexos de nota/comprovante.
 
@@ -51,3 +51,38 @@ Start Command:
 ```bash
 npm start
 ```
+
+
+## Atualização v0.4 - Ajuste visual e gráficos
+
+Esta versão revisa a apresentação da dashboard para reduzir sensação de tela embolada:
+
+- fonte geral reduzida e hierarquia visual mais clara;
+- sidebar ligeiramente menor;
+- cards de indicadores mais compactos;
+- dashboard com bloco principal de saldo previsto;
+- tabela de próximos lançamentos mais enxuta;
+- botão direto para a nova área de gráficos.
+
+Nova rota:
+
+```txt
+/graficos
+```
+
+Indicadores visuais incluídos:
+
+- receitas x despesas por competência;
+- despesas por centro de custo;
+- resultado por unidade de negócio;
+- rateio por filial;
+- status dos lançamentos;
+- teto de gasto por referência, com sinalização verde/amarelo/vermelho.
+
+API adicional:
+
+```txt
+/api/graficos
+```
+
+Observação: os gráficos são renderizados com HTML/CSS puro, sem dependência externa, para facilitar deploy no Render e evitar falhas por CDN.
