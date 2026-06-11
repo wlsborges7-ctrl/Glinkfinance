@@ -1,0 +1,10 @@
+{
+  "name": "glinkfinance-mvp",
+  "version": "0.2.0",
+  "description": "MVP do GlinkFinance - controle financeiro interno com filiais, rateios e parcelamento.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "license": "MIT"
+}

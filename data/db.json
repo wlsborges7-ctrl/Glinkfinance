@@ -1,0 +1,454 @@
+{
+  "filiais": [
+    {
+      "id": "fil-1430",
+      "codigo": "1430",
+      "nome": "Nilópolis",
+      "razaoSocial": "Empresa 1430 Nilópolis Ltda",
+      "cnpj": "00.000.000/0001-30",
+      "percentualRateioPadrao": 50,
+      "status": "ativa"
+    },
+    {
+      "id": "fil-1440",
+      "codigo": "1440",
+      "nome": "Centro",
+      "razaoSocial": "Empresa 1440 Centro Ltda",
+      "cnpj": "00.000.000/0001-40",
+      "percentualRateioPadrao": 30,
+      "status": "ativa"
+    },
+    {
+      "id": "fil-1450",
+      "codigo": "1450",
+      "nome": "Campo Grande",
+      "razaoSocial": "Empresa 1450 Campo Grande Ltda",
+      "cnpj": "00.000.000/0001-50",
+      "percentualRateioPadrao": 20,
+      "status": "ativa"
+    }
+  ],
+  "credoresDevedores": [
+    {
+      "id": "cd-colab-01",
+      "nome": "Colaborador Exemplo",
+      "tipo": "credor",
+      "natureza": "funcionario",
+      "cpfCnpj": "111.111.111-11",
+      "email": "colaborador@exemplo.com",
+      "contato": "(21) 90000-0001",
+      "chavePix": "colaborador@pix.com",
+      "status": "ativo"
+    },
+    {
+      "id": "cd-forn-01",
+      "nome": "Fornecedor de Infraestrutura",
+      "tipo": "credor",
+      "natureza": "fornecedor",
+      "cpfCnpj": "22.222.222/0001-22",
+      "email": "financeiro@fornecedor.com",
+      "contato": "(21) 90000-0002",
+      "chavePix": "22.222.222/0001-22",
+      "status": "ativo"
+    },
+    {
+      "id": "cd-veic-01",
+      "nome": "Locadora de Veículos",
+      "tipo": "credor",
+      "natureza": "fornecedor",
+      "cpfCnpj": "33.333.333/0001-33",
+      "email": "cobranca@locadora.com",
+      "contato": "(21) 90000-0003",
+      "chavePix": "33.333.333/0001-33",
+      "status": "ativo"
+    },
+    {
+      "id": "cd-cli-01",
+      "nome": "Entrada Diversa / Cliente Interno",
+      "tipo": "devedor",
+      "natureza": "cliente_outros",
+      "cpfCnpj": "44.444.444/0001-44",
+      "email": "cliente@exemplo.com",
+      "contato": "(21) 90000-0004",
+      "chavePix": "cliente@pix.com",
+      "status": "ativo"
+    }
+  ],
+  "centrosCusto": [
+    {
+      "id": "cc-rh",
+      "nome": "Recursos Humanos",
+      "status": "ativo"
+    },
+    {
+      "id": "cc-operacional",
+      "nome": "Operacional",
+      "status": "ativo"
+    },
+    {
+      "id": "cc-marketing",
+      "nome": "Marketing",
+      "status": "ativo"
+    },
+    {
+      "id": "cc-infra",
+      "nome": "Infraestrutura",
+      "status": "ativo"
+    },
+    {
+      "id": "cc-admin",
+      "nome": "Administrativo",
+      "status": "ativo"
+    }
+  ],
+  "planosContas": [
+    {
+      "id": "pc-colab",
+      "nome": "Colaboradores",
+      "status": "ativo"
+    },
+    {
+      "id": "pc-veiculos",
+      "nome": "Veículos",
+      "status": "ativo"
+    },
+    {
+      "id": "pc-mao-obra",
+      "nome": "Mão de Obra",
+      "status": "ativo"
+    },
+    {
+      "id": "pc-fornecedores",
+      "nome": "Fornecedores",
+      "status": "ativo"
+    },
+    {
+      "id": "pc-servicos",
+      "nome": "Serviços",
+      "status": "ativo"
+    }
+  ],
+  "referencias": [
+    {
+      "id": "ref-salario",
+      "nome": "Salário",
+      "status": "ativo"
+    },
+    {
+      "id": "ref-combustivel",
+      "nome": "Combustível",
+      "status": "ativo"
+    },
+    {
+      "id": "ref-locacao",
+      "nome": "Locação",
+      "status": "ativo"
+    },
+    {
+      "id": "ref-energia",
+      "nome": "Energia",
+      "status": "ativo"
+    },
+    {
+      "id": "ref-honorarios",
+      "nome": "Honorários",
+      "status": "ativo"
+    },
+    {
+      "id": "ref-receita-diversa",
+      "nome": "Receita Diversa",
+      "status": "ativo"
+    }
+  ],
+  "parcelasTipos": [
+    {
+      "id": "par-unica",
+      "nome": "Única",
+      "modo": "unica",
+      "status": "ativo"
+    },
+    {
+      "id": "par-mensal",
+      "nome": "Mensal",
+      "modo": "mensal",
+      "status": "ativo"
+    },
+    {
+      "id": "par-intervalo",
+      "nome": "Por intervalo",
+      "modo": "intervalo",
+      "status": "ativo"
+    },
+    {
+      "id": "par-quantidade",
+      "nome": "Por quantidade de meses",
+      "modo": "quantidade_meses",
+      "status": "ativo"
+    }
+  ],
+  "lancamentos": [
+    {
+      "id": "lan-001",
+      "grupoParcelamentoId": "grp-seed-001",
+      "tipo": "despesa",
+      "descricao": "Salário equipe operacional",
+      "credorDevedorId": "cd-colab-01",
+      "filialId": "fil-1430",
+      "centroCustoId": "cc-rh",
+      "planoContaId": "pc-colab",
+      "referenciaId": "ref-salario",
+      "parcelaTipoId": "par-mensal",
+      "competencia": "2026-05",
+      "vencimento": "2026-06-05",
+      "parcelaNumero": 1,
+      "parcelaTotal": 1,
+      "valorProvisionado": 1000,
+      "valorRealizado": 1000,
+      "dataRealizacao": "2026-06-05",
+      "status": "liquidado",
+      "rateioModo": "padrao_percentual",
+      "observacao": "Exemplo baseado nas regras do cliente."
+    },
+    {
+      "id": "lan-002",
+      "grupoParcelamentoId": "grp-seed-002",
+      "tipo": "despesa",
+      "descricao": "Combustível frota técnica",
+      "credorDevedorId": "cd-veic-01",
+      "filialId": "fil-1430",
+      "centroCustoId": "cc-operacional",
+      "planoContaId": "pc-veiculos",
+      "referenciaId": "ref-combustivel",
+      "parcelaTipoId": "par-mensal",
+      "competencia": "2026-06",
+      "vencimento": "2026-06-15",
+      "parcelaNumero": 1,
+      "parcelaTotal": 1,
+      "valorProvisionado": 2600,
+      "valorRealizado": 0,
+      "dataRealizacao": "",
+      "status": "provisionado",
+      "rateioModo": "manual_valor",
+      "observacao": "Rateio manual por valor."
+    },
+    {
+      "id": "lan-003",
+      "grupoParcelamentoId": "grp-seed-003",
+      "tipo": "receita",
+      "descricao": "Reembolso intercompany",
+      "credorDevedorId": "cd-cli-01",
+      "filialId": "fil-1440",
+      "centroCustoId": "cc-admin",
+      "planoContaId": "pc-servicos",
+      "referenciaId": "ref-receita-diversa",
+      "parcelaTipoId": "par-unica",
+      "competencia": "2026-06",
+      "vencimento": "2026-06-20",
+      "parcelaNumero": 1,
+      "parcelaTotal": 1,
+      "valorProvisionado": 1800,
+      "valorRealizado": 0,
+      "dataRealizacao": "",
+      "status": "provisionado",
+      "rateioModo": "sem_rateio",
+      "observacao": "Exemplo de entrada/receita."
+    },
+    {
+      "id": "lan-004",
+      "grupoParcelamentoId": "grp-seed-004",
+      "tipo": "despesa",
+      "descricao": "Locação de veículo - Parcela 1/3",
+      "credorDevedorId": "cd-veic-01",
+      "filialId": "fil-1430",
+      "centroCustoId": "cc-operacional",
+      "planoContaId": "pc-veiculos",
+      "referenciaId": "ref-locacao",
+      "parcelaTipoId": "par-mensal",
+      "competencia": "2026-06",
+      "vencimento": "2026-06-10",
+      "parcelaNumero": 1,
+      "parcelaTotal": 3,
+      "valorProvisionado": 900,
+      "valorRealizado": 0,
+      "dataRealizacao": "",
+      "status": "provisionado",
+      "rateioModo": "padrao_percentual",
+      "observacao": "Exemplo de lançamento parcelado."
+    },
+    {
+      "id": "lan-005",
+      "grupoParcelamentoId": "grp-seed-004",
+      "tipo": "despesa",
+      "descricao": "Locação de veículo - Parcela 2/3",
+      "credorDevedorId": "cd-veic-01",
+      "filialId": "fil-1430",
+      "centroCustoId": "cc-operacional",
+      "planoContaId": "pc-veiculos",
+      "referenciaId": "ref-locacao",
+      "parcelaTipoId": "par-mensal",
+      "competencia": "2026-07",
+      "vencimento": "2026-07-10",
+      "parcelaNumero": 2,
+      "parcelaTotal": 3,
+      "valorProvisionado": 900,
+      "valorRealizado": 0,
+      "dataRealizacao": "",
+      "status": "provisionado",
+      "rateioModo": "padrao_percentual",
+      "observacao": "Exemplo de lançamento parcelado."
+    },
+    {
+      "id": "lan-006",
+      "grupoParcelamentoId": "grp-seed-004",
+      "tipo": "despesa",
+      "descricao": "Locação de veículo - Parcela 3/3",
+      "credorDevedorId": "cd-veic-01",
+      "filialId": "fil-1430",
+      "centroCustoId": "cc-operacional",
+      "planoContaId": "pc-veiculos",
+      "referenciaId": "ref-locacao",
+      "parcelaTipoId": "par-mensal",
+      "competencia": "2026-08",
+      "vencimento": "2026-08-10",
+      "parcelaNumero": 3,
+      "parcelaTotal": 3,
+      "valorProvisionado": 900,
+      "valorRealizado": 0,
+      "dataRealizacao": "",
+      "status": "provisionado",
+      "rateioModo": "padrao_percentual",
+      "observacao": "Exemplo de lançamento parcelado."
+    }
+  ],
+  "rateios": [
+    {
+      "id": "rat-001-a",
+      "lancamentoId": "lan-001",
+      "filialId": "fil-1430",
+      "modo": "percentual",
+      "percentual": 50,
+      "valorRateado": 500
+    },
+    {
+      "id": "rat-001-b",
+      "lancamentoId": "lan-001",
+      "filialId": "fil-1440",
+      "modo": "percentual",
+      "percentual": 30,
+      "valorRateado": 300
+    },
+    {
+      "id": "rat-001-c",
+      "lancamentoId": "lan-001",
+      "filialId": "fil-1450",
+      "modo": "percentual",
+      "percentual": 20,
+      "valorRateado": 200
+    },
+    {
+      "id": "rat-002-a",
+      "lancamentoId": "lan-002",
+      "filialId": "fil-1430",
+      "modo": "valor",
+      "percentual": 53.8462,
+      "valorRateado": 1400
+    },
+    {
+      "id": "rat-002-b",
+      "lancamentoId": "lan-002",
+      "filialId": "fil-1440",
+      "modo": "valor",
+      "percentual": 30.7692,
+      "valorRateado": 800
+    },
+    {
+      "id": "rat-002-c",
+      "lancamentoId": "lan-002",
+      "filialId": "fil-1450",
+      "modo": "valor",
+      "percentual": 15.3846,
+      "valorRateado": 400
+    },
+    {
+      "id": "rat-003-a",
+      "lancamentoId": "lan-003",
+      "filialId": "fil-1440",
+      "modo": "sem_rateio",
+      "percentual": 100,
+      "valorRateado": 1800
+    },
+    {
+      "id": "rat-lan-004-fil-1430",
+      "lancamentoId": "lan-004",
+      "filialId": "fil-1430",
+      "modo": "percentual",
+      "percentual": 50,
+      "valorRateado": 450
+    },
+    {
+      "id": "rat-lan-004-fil-1440",
+      "lancamentoId": "lan-004",
+      "filialId": "fil-1440",
+      "modo": "percentual",
+      "percentual": 30,
+      "valorRateado": 270
+    },
+    {
+      "id": "rat-lan-004-fil-1450",
+      "lancamentoId": "lan-004",
+      "filialId": "fil-1450",
+      "modo": "percentual",
+      "percentual": 20,
+      "valorRateado": 180
+    },
+    {
+      "id": "rat-lan-005-fil-1430",
+      "lancamentoId": "lan-005",
+      "filialId": "fil-1430",
+      "modo": "percentual",
+      "percentual": 50,
+      "valorRateado": 450
+    },
+    {
+      "id": "rat-lan-005-fil-1440",
+      "lancamentoId": "lan-005",
+      "filialId": "fil-1440",
+      "modo": "percentual",
+      "percentual": 30,
+      "valorRateado": 270
+    },
+    {
+      "id": "rat-lan-005-fil-1450",
+      "lancamentoId": "lan-005",
+      "filialId": "fil-1450",
+      "modo": "percentual",
+      "percentual": 20,
+      "valorRateado": 180
+    },
+    {
+      "id": "rat-lan-006-fil-1430",
+      "lancamentoId": "lan-006",
+      "filialId": "fil-1430",
+      "modo": "percentual",
+      "percentual": 50,
+      "valorRateado": 450
+    },
+    {
+      "id": "rat-lan-006-fil-1440",
+      "lancamentoId": "lan-006",
+      "filialId": "fil-1440",
+      "modo": "percentual",
+      "percentual": 30,
+      "valorRateado": 270
+    },
+    {
+      "id": "rat-lan-006-fil-1450",
+      "lancamentoId": "lan-006",
+      "filialId": "fil-1450",
+      "modo": "percentual",
+      "percentual": 20,
+      "valorRateado": 180
+    }
+  ],
+  "logs": []
+}
