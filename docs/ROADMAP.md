@@ -1,78 +1,26 @@
-# Rota de implantação - GlinkFinance
+# Roadmap - GlinkFinance
 
-## Fase 0 - Protótipo navegável
+## Fase atual - v0.3
 
-Status: entregue no MVP v0.2.
+Protótipo funcional para validação com cliente em ambiente de demonstração.
 
-Objetivo: validar fluxo com o cliente sem banco, sem login e sem infraestrutura.
+## Próxima fase - MVP operacional
 
-Entregas:
+1. Migrar persistência de `data/db.json` para PostgreSQL.
+2. Implementar autenticação.
+3. Criar perfis: administrador, financeiro, consulta e aprovador.
+4. Criar edição de lançamentos.
+5. Criar filtros avançados.
+6. Tornar anexos persistentes via storage externo.
+7. Criar relatório de fechamento mensal.
+8. Criar logs completos por usuário, campo alterado, valor anterior e valor novo.
 
-- identidade GlinkFinance;
-- lançamentos de receita/despesa;
-- filiais;
-- credores/devedores;
-- classificação em 3 níveis;
-- rateio por percentual/valor;
-- parcelamento;
-- dashboard;
-- relatórios;
-- CSV.
+## Fase produto
 
-## Fase 1 - MVP operacional
-
-Objetivo: deixar pronto para uso controlado por equipe interna.
-
-Entregas:
-
-- migração JSON para PostgreSQL;
-- autenticação;
-- perfis de usuário: admin, financeiro, consulta, aprovador;
-- tela de edição de lançamento;
-- anexos de nota, boleto e comprovante;
-- baixa com data, valor e forma de pagamento;
-- filtros avançados;
-- fechamento mensal por competência;
-- logs de auditoria robustos.
-
-## Fase 2 - Controle financeiro real
-
-Objetivo: transformar o MVP em sistema financeiro interno confiável.
-
-Entregas:
-
-- aprovação de despesas;
-- recorrências fixas;
-- conciliação manual de extrato;
-- contas bancárias;
-- fluxo de caixa previsto x realizado;
-- DRE gerencial simples;
-- exportação Excel/PDF;
-- alertas de vencimento;
-- anexos em storage.
-
-## Fase 3 - Integrações
-
-Objetivo: conectar com o ecossistema real do provedor.
-
-Entregas:
-
-- integração eventual com IXC apenas para indicadores de receita/base, se necessário;
-- importação da planilha legada;
-- importação de extrato bancário OFX/CSV;
-- WhatsApp/e-mail para alerta interno;
-- API para BI externo.
-
-## Fase 4 - Produto vendável
-
-Objetivo: tornar o GlinkFinance replicável para outros grupos empresariais/provedores.
-
-Entregas:
-
-- multiempresa/multitenant;
-- parametrização de plano de contas;
-- permissões por filial;
-- trilha de auditoria imutável;
-- backups automáticos;
-- onboarding guiado;
-- documentação técnica e manual do usuário.
+1. Multiempresa/multicliente.
+2. Integração IXC apenas quando necessário.
+3. Importação da planilha histórica.
+4. Integração bancária/conciliador.
+5. Alertas de vencimento.
+6. DRE gerencial.
+7. Deploy com backup automático.

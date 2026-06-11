@@ -1,14 +1,11 @@
-# GlinkFinance MVP v0.2
+# GlinkFinance MVP v0.3
 
-MVP funcional para controle financeiro interno de grupo de provedores, separado do IXC. O IXC permanece como fonte de clientes/contratos. O GlinkFinance controla lançamentos internos, despesas, receitas, credores/devedores, filiais, rateios, classificação em três níveis e parcelamentos.
+Sistema de gestão financeira com foco em ISP's, estruturado para controlar receitas, despesas, competência, vencimento, rateios entre filiais, classificações, reservas, empréstimos/devoluções e anexos de nota/comprovante.
 
-## Como rodar
-
-Requisito: Node.js instalado.
+## Como rodar localmente
 
 ```bash
-cd GlinkFinance
-node server.js
+npm start
 ```
 
 Acesse:
@@ -17,54 +14,40 @@ Acesse:
 http://localhost:3000
 ```
 
-Não há dependências externas nesta versão. A base de teste fica em `data/db.json`.
+## Funcionalidades implantadas nesta versão
 
-## Funcionalidades implementadas no MVP
+- Tela separada de **Novo Lançamento**, sem listar lançamentos cadastrados.
+- Campos de novo lançamento iniciando em branco.
+- Cadastro de **Unidade de Negócio**.
+- Classificação em quatro níveis: Unidade de Negócio, Centro de Custo, Plano de Contas e Referência.
+- Cadastro prévio de filiais, credores/devedores, classificações, formas de pagamento e bancos na área de **Parametrização**.
+- Receitas e despesas com data de vencimento e competência.
+- Parcelamento mensal, por intervalo de dias ou por quantidade de meses.
+- Rateio entre filiais apenas quando marcada a opção **Com rateio**.
+- Inclusão dinâmica de mais/menos filiais no rateio.
+- Rateio por percentual ou por valor.
+- Campo de Nota/NF e upload de PDF de nota fiscal/nota de compra.
+- Baixa de lançamento com data de pagamento, valor baixado, valor de multa, forma de pagamento, banco e comprovante.
+- Relatório analítico com teto de gasto por referência e sinalização verde/amarela/vermelha.
+- Margem de lucro operacional desconsiderando reservas e retiradas.
+- Aba de controle de reservas.
+- Aba de controle de empréstimos e devoluções.
+- Exportação CSV.
 
-- Nome e identidade visual alterados para **GlinkFinance**;
-- Entradas de receitas e despesas;
-- Data de vencimento e mês de competência;
-- Filiais previamente cadastradas;
-- Rateio/compartilhamento entre filiais por percentual padrão;
-- Rateio manual por percentual;
-- Rateio manual por valor;
-- Lançamento sem rateio;
-- Classificação em três níveis:
-  - Nível 1: Centro de custo;
-  - Nível 2: Plano de contas;
-  - Nível 3: Referência;
-- Credor/devedor previamente cadastrado;
-- Cadastro de filial, credor/devedor e classificações;
-- Lançamentos parcelados por quantidade de parcelas/meses;
-- Lançamentos por intervalo de dias;
-- Valor provisionado;
-- Status provisionado, aprovado, liquidado e cancelado;
-- Dashboard;
-- Relatórios por centro de custo, plano de contas e referência;
-- Relatório de rateios;
-- Exportação CSV;
-- API simples.
+## Observação importante para Render
 
-## Rotas principais
+Esta versão usa `data/db.json` e a pasta `uploads/` para persistência local. Em deploy gratuito no Render, o armazenamento local pode ser apagado em reinícios/redeploys. Para produção, migrar para PostgreSQL/Supabase e storage persistente.
 
-```txt
-GET  /                         Dashboard
-GET  /lancamentos              Lista e cria lançamentos
-POST /lancamentos              Cria lançamento simples ou parcelado
-POST /lancamentos/:id/liquidar Liquida despesa/receita
-POST /lancamentos/:id/cancelar Cancela lançamento
-GET  /rateios                  Relatório de rateios
-GET  /filiais                  Cadastro de filiais
-POST /filiais                  Cria filial
-GET  /credores-devedores       Cadastro de credores/devedores
-POST /credores-devedores       Cria credor/devedor
-GET  /classificacoes           Cadastros de centro, plano, referência e parcela
-GET  /relatorios               Relatórios gerenciais
-GET  /api/dashboard            Dashboard em JSON
-GET  /api/lancamentos          Lançamentos em JSON
-GET  /export/lancamentos.csv   Exportação CSV
+## Comandos Render
+
+Build Command:
+
+```bash
+npm install
 ```
 
-## Observação
+Start Command:
 
-Este MVP usa JSON para teste local rápido. Para implantação real, migrar para PostgreSQL, autenticação, permissões, storage de anexos/comprovantes e logs imutáveis.
+```bash
+npm start
+```

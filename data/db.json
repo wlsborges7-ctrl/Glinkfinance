@@ -132,31 +132,65 @@
     {
       "id": "ref-salario",
       "nome": "Salário",
-      "status": "ativo"
+      "status": "ativo",
+      "centroCustoId": "cc-rh",
+      "planoContaId": "pc-colab",
+      "tetoGasto": 10000
     },
     {
       "id": "ref-combustivel",
       "nome": "Combustível",
-      "status": "ativo"
+      "status": "ativo",
+      "centroCustoId": "cc-operacional",
+      "planoContaId": "pc-veiculos",
+      "tetoGasto": 2000
     },
     {
       "id": "ref-locacao",
       "nome": "Locação",
-      "status": "ativo"
+      "status": "ativo",
+      "centroCustoId": "cc-operacional",
+      "planoContaId": "pc-veiculos",
+      "tetoGasto": 3000
     },
     {
       "id": "ref-energia",
       "nome": "Energia",
-      "status": "ativo"
+      "status": "ativo",
+      "centroCustoId": "cc-infra",
+      "planoContaId": "pc-fornecedores",
+      "tetoGasto": 2500
     },
     {
       "id": "ref-honorarios",
       "nome": "Honorários",
-      "status": "ativo"
+      "status": "ativo",
+      "centroCustoId": "cc-admin",
+      "planoContaId": "pc-servicos",
+      "tetoGasto": 2000
     },
     {
       "id": "ref-receita-diversa",
       "nome": "Receita Diversa",
+      "status": "ativo",
+      "centroCustoId": "cc-admin",
+      "planoContaId": "pc-servicos",
+      "tetoGasto": 0
+    },
+    {
+      "id": "ref-reserva",
+      "nome": "Reserva",
+      "centroCustoId": "cc-admin",
+      "planoContaId": "pc-servicos",
+      "tetoGasto": 0,
+      "status": "ativo"
+    },
+    {
+      "id": "ref-retirada",
+      "nome": "Retirada",
+      "centroCustoId": "cc-admin",
+      "planoContaId": "pc-servicos",
+      "tetoGasto": 0,
       "status": "ativo"
     }
   ],
@@ -205,9 +239,21 @@
       "valorProvisionado": 1000,
       "valorRealizado": 1000,
       "dataRealizacao": "2026-06-05",
-      "status": "liquidado",
+      "status": "pago",
       "rateioModo": "padrao_percentual",
-      "observacao": "Exemplo baseado nas regras do cliente."
+      "observacao": "Exemplo baseado nas regras do cliente.",
+      "unidadeNegocioId": "un-sede-nilopolis",
+      "notaTipo": "",
+      "notaNumero": "",
+      "anexoNotaUrl": "",
+      "anexoNotaNome": "",
+      "comprovanteUrl": "",
+      "comprovanteNome": "",
+      "formaPagamentoId": "fp-transferencia",
+      "bancoId": "bc-bb",
+      "valorBaixado": 1000,
+      "dataPagamento": "2026-06-05",
+      "valorMulta": 0
     },
     {
       "id": "lan-002",
@@ -229,7 +275,19 @@
       "dataRealizacao": "",
       "status": "provisionado",
       "rateioModo": "manual_valor",
-      "observacao": "Rateio manual por valor."
+      "observacao": "Rateio manual por valor.",
+      "unidadeNegocioId": "un-pop-mirandela",
+      "notaTipo": "",
+      "notaNumero": "",
+      "anexoNotaUrl": "",
+      "anexoNotaNome": "",
+      "comprovanteUrl": "",
+      "comprovanteNome": "",
+      "formaPagamentoId": "fp-transferencia",
+      "bancoId": "bc-bb",
+      "valorBaixado": 0,
+      "dataPagamento": "",
+      "valorMulta": 0
     },
     {
       "id": "lan-003",
@@ -251,7 +309,19 @@
       "dataRealizacao": "",
       "status": "provisionado",
       "rateioModo": "sem_rateio",
-      "observacao": "Exemplo de entrada/receita."
+      "observacao": "Exemplo de entrada/receita.",
+      "unidadeNegocioId": "un-loja-nilopolis",
+      "notaTipo": "",
+      "notaNumero": "",
+      "anexoNotaUrl": "",
+      "anexoNotaNome": "",
+      "comprovanteUrl": "",
+      "comprovanteNome": "",
+      "formaPagamentoId": "fp-transferencia",
+      "bancoId": "bc-bb",
+      "valorBaixado": 0,
+      "dataPagamento": "",
+      "valorMulta": 0
     },
     {
       "id": "lan-004",
@@ -273,7 +343,19 @@
       "dataRealizacao": "",
       "status": "provisionado",
       "rateioModo": "padrao_percentual",
-      "observacao": "Exemplo de lançamento parcelado."
+      "observacao": "Exemplo de lançamento parcelado.",
+      "unidadeNegocioId": "un-sede-nilopolis",
+      "notaTipo": "",
+      "notaNumero": "",
+      "anexoNotaUrl": "",
+      "anexoNotaNome": "",
+      "comprovanteUrl": "",
+      "comprovanteNome": "",
+      "formaPagamentoId": "fp-transferencia",
+      "bancoId": "bc-bb",
+      "valorBaixado": 0,
+      "dataPagamento": "",
+      "valorMulta": 0
     },
     {
       "id": "lan-005",
@@ -295,7 +377,19 @@
       "dataRealizacao": "",
       "status": "provisionado",
       "rateioModo": "padrao_percentual",
-      "observacao": "Exemplo de lançamento parcelado."
+      "observacao": "Exemplo de lançamento parcelado.",
+      "unidadeNegocioId": "un-pop-mirandela",
+      "notaTipo": "",
+      "notaNumero": "",
+      "anexoNotaUrl": "",
+      "anexoNotaNome": "",
+      "comprovanteUrl": "",
+      "comprovanteNome": "",
+      "formaPagamentoId": "fp-transferencia",
+      "bancoId": "bc-bb",
+      "valorBaixado": 0,
+      "dataPagamento": "",
+      "valorMulta": 0
     },
     {
       "id": "lan-006",
@@ -317,7 +411,19 @@
       "dataRealizacao": "",
       "status": "provisionado",
       "rateioModo": "padrao_percentual",
-      "observacao": "Exemplo de lançamento parcelado."
+      "observacao": "Exemplo de lançamento parcelado.",
+      "unidadeNegocioId": "un-loja-nilopolis",
+      "notaTipo": "",
+      "notaNumero": "",
+      "anexoNotaUrl": "",
+      "anexoNotaNome": "",
+      "comprovanteUrl": "",
+      "comprovanteNome": "",
+      "formaPagamentoId": "fp-transferencia",
+      "bancoId": "bc-bb",
+      "valorBaixado": 0,
+      "dataPagamento": "",
+      "valorMulta": 0
     }
   ],
   "rateios": [
@@ -450,5 +556,118 @@
       "valorRateado": 180
     }
   ],
-  "logs": []
+  "logs": [],
+  "unidadesNegocio": [
+    {
+      "id": "un-loja-nilopolis",
+      "nome": "Loja Nilópolis",
+      "descricao": "Atendimento comercial",
+      "status": "ativo"
+    },
+    {
+      "id": "un-sede-nilopolis",
+      "nome": "Sede Nilópolis",
+      "descricao": "Administrativo e operação",
+      "status": "ativo"
+    },
+    {
+      "id": "un-pop-mirandela",
+      "nome": "POP Mirandela",
+      "descricao": "Ponto de presença",
+      "status": "ativo"
+    }
+  ],
+  "formasPagamento": [
+    {
+      "id": "fp-transferencia",
+      "nome": "Transferência",
+      "status": "ativo"
+    },
+    {
+      "id": "fp-pix",
+      "nome": "Pix",
+      "status": "ativo"
+    },
+    {
+      "id": "fp-boleto",
+      "nome": "Boleto",
+      "status": "ativo"
+    },
+    {
+      "id": "fp-cartao",
+      "nome": "Cartão",
+      "status": "ativo"
+    },
+    {
+      "id": "fp-dinheiro",
+      "nome": "Dinheiro",
+      "status": "ativo"
+    }
+  ],
+  "bancos": [
+    {
+      "id": "bc-bb",
+      "nome": "Banco do Brasil",
+      "agencia": "",
+      "conta": "",
+      "status": "ativo"
+    },
+    {
+      "id": "bc-itau",
+      "nome": "Itaú",
+      "agencia": "",
+      "conta": "",
+      "status": "ativo"
+    },
+    {
+      "id": "bc-inter",
+      "nome": "Banco Inter",
+      "agencia": "",
+      "conta": "",
+      "status": "ativo"
+    },
+    {
+      "id": "bc-caixa",
+      "nome": "Caixa Econômica Federal",
+      "agencia": "",
+      "conta": "",
+      "status": "ativo"
+    }
+  ],
+  "reservas": [
+    {
+      "id": "res-seed-01",
+      "data": "2026-06-01",
+      "tipo": "entrada",
+      "categoria": "Reserva técnica",
+      "valor": 5000,
+      "descricao": "Constituição inicial de reserva técnica",
+      "observacao": "Exemplo genérico",
+      "createdAt": "2026-06-01T12:00:00.000Z"
+    },
+    {
+      "id": "res-seed-02",
+      "data": "2026-06-08",
+      "tipo": "saida",
+      "categoria": "Reserva técnica",
+      "valor": 1200,
+      "descricao": "Uso de reserva para manutenção emergencial",
+      "observacao": "Exemplo genérico",
+      "createdAt": "2026-06-08T12:00:00.000Z"
+    }
+  ],
+  "emprestimos": [
+    {
+      "id": "emp-seed-01",
+      "dataEmprestimo": "2026-06-03",
+      "dataPrevistaDevolucao": "2026-07-03",
+      "parte": "Empresa do Grupo - Exemplo",
+      "valorOriginal": 3000,
+      "valorDevolvido": 1000,
+      "descricao": "Empréstimo intercompany de teste",
+      "observacao": "Exemplo genérico",
+      "status": "em_aberto",
+      "createdAt": "2026-06-03T12:00:00.000Z"
+    }
+  ]
 }
