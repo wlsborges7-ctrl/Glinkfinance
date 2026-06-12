@@ -1,4 +1,4 @@
-# GlinkFinance MVP v0.4
+# GlinkFinance MVP v0.6
 
 Sistema de gestão financeira com foco em ISP's, estruturado para controlar receitas, despesas, competência, vencimento, rateios entre filiais, classificações, reservas, empréstimos/devoluções e anexos de nota/comprovante.
 
@@ -86,3 +86,61 @@ API adicional:
 ```
 
 Observação: os gráficos são renderizados com HTML/CSS puro, sem dependência externa, para facilitar deploy no Render e evitar falhas por CDN.
+
+## v0.5 - rodada de validação com cliente
+
+A versão 0.5 adiciona:
+
+- login obrigatório;
+- usuários de demonstração Gestor e Assistente;
+- perfil Gestor com acesso integral;
+- perfil Assistente com controle específico de acesso a dados sensíveis;
+- opção de "Dados sensíveis" no cadastro de Plano de Contas;
+- filtros avançados na tela de Lançamentos;
+- sinalização visual de lançamentos com rateio;
+- alteração do dashboard de "Próximos lançamentos" para "Próximas Operações";
+- remoção da tela própria de Reservas do menu, passando a tratar reservas/retiradas como lançamentos parametrizados;
+- empréstimos/devoluções com parcelamento, data prevista de devolução e histórico de devoluções.
+
+### Acessos de demonstração
+
+Gestor:
+
+```txt
+gestor@glinkfinance.com / gestor123
+```
+
+Assistente:
+
+```txt
+assistente@glinkfinance.com / assistente123
+```
+
+Observação: autenticação, senhas e sessões são adequadas para demonstração. Em produção, migrar para PostgreSQL, hash forte com bcrypt/argon2, HTTPS obrigatório, storage persistente e trilha de auditoria transacional.
+
+## v0.6 - usuários e visual executivo
+
+A versão 0.6 adiciona e ajusta:
+
+- rota própria de administração de usuários em `/usuarios`;
+- criação de novos usuários pelo perfil Gestor;
+- ativação/desativação de usuários;
+- liberação ou bloqueio de acesso a dados sensíveis para Assistentes;
+- saudação fixa no topo: `Olá, nome do usuário`;
+- manutenção dos dois acessos de demonstração iniciais;
+- paleta minimalista executivo-financeira, com fundo off-white, sidebar escura, botões verde profundo e destaque dourado discreto;
+- redução visual da interface para deixar dashboard e tabelas mais limpas.
+
+### Observação sobre usuários
+
+O sistema não está limitado aos dois usuários de demonstração. Eles são apenas seeds iniciais. O Gestor pode criar os usuários reais do cliente em:
+
+```txt
+/usuarios
+```
+
+ou pela área:
+
+```txt
+/parametrizacao#usuarios
+```

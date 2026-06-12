@@ -32,6 +32,45 @@ const paidStatuses = new Set(['pago','baixado','liquidado']);
 const send = (res, status, body, type='text/html; charset=utf-8') => { res.writeHead(status, {'Content-Type': type}); res.end(body); };
 const redirect = (res, to) => { res.writeHead(303, { Location: to }); res.end(); };
 
+const sessions = new Map();
+const SESSION_TTL_MS = 1000 * 60 * 60 * 8;
+let currentUserContext = null;
+function hashPassword(password, salt='glinkfinance-demo') {
+  return crypto.createHash('sha256').update(`${salt}:${password}`).digest('hex');
+}
+function cookieMap(req) {
+  return Object.fromEntries(String(req.headers.cookie || '').split(';').map(x => x.trim()).filter(Boolean).map(x => {
+    const i = x.indexOf('='); return i >= 0 ? [decodeURIComponent(x.slice(0,i)), decodeURIComponent(x.slice(i+1))] : [x,''];
+  }));
+}
+function currentUser(req, db) {
+  const sid = cookieMap(req).gf_session;
+  if (!sid || !sessions.has(sid)) return null;
+  const sess = sessions.get(sid);
+  if (!sess || sess.expiresAt < Date.now()) { sessions.delete(sid); return null; }
+  const user = (db.usuarios || []).find(u => u.id === sess.userId && u.status === 'ativo');
+  if (!user) { sessions.delete(sid); return null; }
+  sess.expiresAt = Date.now() + SESSION_TTL_MS;
+  return user;
+}
+function setSession(res, user) {
+  const sid = crypto.randomUUID();
+  sessions.set(sid, { userId:user.id, expiresAt: Date.now() + SESSION_TTL_MS });
+  res.writeHead(303, { 'Location':'/', 'Set-Cookie':`gf_session=${encodeURIComponent(sid)}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${SESSION_TTL_MS/1000}` });
+  res.end();
+}
+function clearSession(req, res) {
+  const sid = cookieMap(req).gf_session;
+  if (sid) sessions.delete(sid);
+  res.writeHead(303, { 'Location':'/login', 'Set-Cookie':'gf_session=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0' });
+  res.end();
+}
+function canManage(user) { return user?.perfil === 'gestor'; }
+function canViewSensitive(user) { return !!user && (user.perfil === 'gestor' || user.podeVerDadosSensiveis === true); }
+function renderLogin(err='') {
+  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Login - GlinkFinance</title><link rel="stylesheet" href="/public/styles.css"></head><body class="login-body"><main class="login-shell"><section class="login-card"><div class="brand login-brand">Glink<span>Finance</span><small>ISP</small></div><h1>Acesso ao sistema</h1><p>Entre com usuário e senha para acessar o ambiente financeiro.</p>${err?`<div class="error">${esc(err)}</div>`:''}<form method="post" action="/login" class="form"><label>E-mail<input type="email" name="email" required autofocus></label><label>Senha<input type="password" name="senha" required></label><button>Entrar</button></form><div class="demo-access"><strong>Acessos de demonstração</strong><span>Gestor: gestor@glinkfinance.com / gestor123</span><span>Assistente: assistente@glinkfinance.com / assistente123</span></div></section></main></body></html>`;
+}
+
 function normalizeDb(db) {
   db.unidadesNegocio ||= [
     { id:'un-loja-nilopolis', nome:'Loja Nilópolis', descricao:'Atendimento comercial', status:'ativo' },
@@ -62,6 +101,20 @@ function normalizeDb(db) {
   db.lancamentos ||= [];
   db.rateios ||= [];
   db.logs ||= [];
+  db.usuarios ||= [];
+  if (!db.usuarios.length) {
+    db.usuarios.push(
+      { id:'usr-gestor', nome:'Gestor Demo', email:'gestor@glinkfinance.com', senhaHash:hashPassword('gestor123'), perfil:'gestor', podeVerDadosSensiveis:true, status:'ativo' },
+      { id:'usr-assistente', nome:'Assistente Demo', email:'assistente@glinkfinance.com', senhaHash:hashPassword('assistente123'), perfil:'assistente', podeVerDadosSensiveis:false, status:'ativo' }
+    );
+  }
+  for (const u of db.usuarios) {
+    u.perfil ||= 'assistente';
+    u.podeVerDadosSensiveis = u.perfil === 'gestor' ? true : !!u.podeVerDadosSensiveis;
+    u.status ||= 'ativo';
+    if (!u.senhaHash && u.senha) { u.senhaHash = hashPassword(u.senha); delete u.senha; }
+  }
+  for (const p of db.planosContas) p.dadosSensiveis = !!p.dadosSensiveis;
 
   for (const r of db.referencias) {
     r.tetoGasto = r.tetoGasto ?? defaultTetoReferencia(r.nome);
@@ -203,7 +256,7 @@ function maps(db) {
   const map = list => Object.fromEntries((list || []).map(i => [i.id, i]));
   return {
     unidades: map(db.unidadesNegocio), filiais: map(db.filiais), credores: map(db.credoresDevedores), centros: map(db.centrosCusto),
-    planos: map(db.planosContas), referencias: map(db.referencias), parcelas: map(db.parcelasTipos), formas: map(db.formasPagamento), bancos: map(db.bancos)
+    planos: map(db.planosContas), referencias: map(db.referencias), parcelas: map(db.parcelasTipos), formas: map(db.formasPagamento), bancos: map(db.bancos), usuarios: map(db.usuarios)
   };
 }
 function addLog(db, acao, entidade, entidadeId, dados = {}) {
@@ -227,18 +280,59 @@ function isReservaRetirada(db, l) {
   return ref.includes('reserva') || ref.includes('retirada') || plano.includes('reserva') || plano.includes('retirada') || desc.includes('reserva') || desc.includes('retirada');
 }
 
+function isSensitiveLancamento(db, l) {
+  const m = maps(db);
+  return !!(m.planos[l?.planoContaId]?.dadosSensiveis || m.referencias[l?.referenciaId]?.dadosSensiveis);
+}
+function visibleLancamentos(db, user=currentUserContext) {
+  const list = db.lancamentos || [];
+  if (canViewSensitive(user)) return list;
+  return list.filter(l => !isSensitiveLancamento(db, l));
+}
+function visibleDb(db, user=currentUserContext) {
+  const ids = new Set(visibleLancamentos(db, user).map(l => l.id));
+  return { ...db, lancamentos: visibleLancamentos(db, user), rateios: (db.rateios || []).filter(r => ids.has(r.lancamentoId)) };
+}
+function sensitiveNotice(db, user=currentUserContext) {
+  if (canViewSensitive(user)) return '';
+  const hidden = (db.lancamentos || []).filter(l => isSensitiveLancamento(db, l)).length;
+  return hidden ? `<div class="notice">${hidden} lançamento(s) com dados sensíveis foram ocultados para o perfil atual.</div>` : '';
+}
+function rateioInfo(db, l) {
+  const linhas = (db.rateios || []).filter(r => r.lancamentoId === l.id);
+  const comRateio = linhas.length > 1 || (l.rateioModo && l.rateioModo !== 'sem_rateio');
+  return { comRateio, linhas };
+}
+function reservasFluxo(db, user=currentUserContext) {
+  return visibleLancamentos(db, user).filter(l => isValidLancamento(l) && isReservaRetirada(db,l)).reduce((s,l)=>s+(l.tipo==='receita'?num(l.valorProvisionado):-num(l.valorProvisionado)),0);
+}
+
 function opts(list, selected='', blank=true) {
   const b = blank ? '<option value="">Selecione...</option>' : '';
   return b + (list || []).map(i => `<option value="${esc(i.id)}" ${selected===i.id?'selected':''}>${esc(i.codigo ? `${i.codigo} - ${i.nome}` : i.nome)}</option>`).join('');
 }
 function nav(active) {
+  const u = currentUserContext;
   const links = [
-    ['/', 'Dashboard', 'dashboard'], ['/graficos','Gráficos','graficos'], ['/lancamentos','Lançamentos','lancamentos'], ['/reservas','Reservas','reservas'], ['/emprestimos','Empréstimos/Devoluções','emprestimos'], ['/rateios','Rateios','rateios'], ['/relatorios','Relatórios','relatorios'], ['/parametrizacao','Parametrização','parametrizacao']
+    ['/', 'Dashboard', 'dashboard'],
+    ['/graficos','Gráficos','graficos'],
+    ['/lancamentos','Lançamentos','lancamentos'],
+    ['/emprestimos','Empréstimos/Devoluções','emprestimos'],
+    ['/rateios','Rateios','rateios'],
+    ['/relatorios','Relatórios','relatorios'],
+    ['/parametrizacao','Parametrização','parametrizacao'],
+    ...(canManage(u) ? [['/usuarios','Usuários','usuarios']] : [])
   ];
-  return `<aside class="sidebar"><div class="brand">Glink<span>Finance</span><small>ISP</small></div><nav class="nav">${links.map(([href,label,key])=>`<a class="${active===key?'active':''}" href="${href}">${label}</a>`).join('')}</nav></aside>`;
+  return `<aside class="sidebar"><div class="brand">Glink<span>Finance</span><small>ISP</small></div><nav class="nav">${links.map(([href,label,key])=>`<a class="${active===key?'active':''}" href="${href}">${label}</a>`).join('')}</nav>${u?`<div class="user-box"><strong>${esc(u.nome)}</strong><span>${esc(u.perfil)}${canViewSensitive(u)?' · dados sensíveis':' · sem dados sensíveis'}</span><form method="post" action="/logout"><button class="small ghost">Sair</button></form></div>`:''}</aside>`;
+}
+function topbar() {
+  const u = currentUserContext;
+  if (!u) return '';
+  const acesso = canViewSensitive(u) ? 'com acesso a dados sensíveis' : 'sem acesso a dados sensíveis';
+  return `<div class="topbar"><div><span>Olá, ${esc(u.nome)}</span><small>${esc(u.perfil)} · ${esc(acesso)}</small></div></div>`;
 }
 function layout(title, active, body) {
-  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(title)} - GlinkFinance</title><link rel="stylesheet" href="/public/styles.css"></head><body><div class="app">${nav(active)}<main class="main">${body}</main></div><script src="/public/app.js"></script></body></html>`;
+  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(title)} - GlinkFinance</title><link rel="stylesheet" href="/public/styles.css"></head><body><div class="app">${nav(active)}<main class="main">${topbar()}${body}</main></div><script src="/public/app.js"></script></body></html>`;
 }
 function header(t,s,a=''){ return `<div class="page-header"><div><h1>${esc(t)}</h1><p>${esc(s)}</p></div><div class="header-actions">${a}</div></div>`; }
 function cardMetric(label, value, cls='') { return `<div class="metric"><span>${esc(label)}</span><strong class="${cls}">${value}</strong></div>`; }
@@ -285,7 +379,7 @@ function criarRateios(db, lancamento, body = {}) {
 }
 
 function calcularDashboard(db) {
-  const validos = db.lancamentos.filter(isValidLancamento);
+  const validos = visibleLancamentos(db).filter(isValidLancamento);
   const entradas = validos.filter(l => l.tipo === 'receita').reduce((s,l)=>s+num(l.valorProvisionado),0);
   const despesas = validos.filter(l => l.tipo === 'despesa').reduce((s,l)=>s+num(l.valorProvisionado),0);
   const recebido = validos.filter(l => l.tipo === 'receita' && realizado(l)).reduce((s,l)=>s+num(l.valorBaixado || l.valorRealizado || l.valorProvisionado),0);
@@ -306,13 +400,13 @@ function calcularDashboard(db) {
     const un = m.unidades[l.unidadeNegocioId]?.nome || 'Sem unidade'; porUnidade[un] = (porUnidade[un] || 0) + fator * num(l.valorProvisionado);
   }
   for (const r of db.rateios) {
-    const l = find(db.lancamentos, r.lancamentoId); if (!isValidLancamento(l)) continue;
+    const l = find(visibleLancamentos(db), r.lancamentoId); if (!isValidLancamento(l)) continue;
     const f = m.filiais[r.filialId]?.codigo ? `${m.filiais[r.filialId].codigo} - ${m.filiais[r.filialId].nome}` : (m.filiais[r.filialId]?.nome || 'Sem filial');
     const fator = l.tipo === 'receita' ? 1 : -1;
     porFilial[f] = (porFilial[f] || 0) + fator * num(r.valorRateado);
   }
   const proximos = validos.filter(l => !realizado(l)).sort((a,b)=>a.vencimento.localeCompare(b.vencimento)).slice(0,10);
-  const reservasSaldo = db.reservas.reduce((s,r)=>s+(r.tipo === 'entrada' ? num(r.valor) : -num(r.valor)),0);
+  const reservasSaldo = reservasFluxo(db);
   const emprestimosAberto = db.emprestimos.filter(e=>e.status !== 'quitado').reduce((s,e)=>s+(num(e.valorOriginal)-num(e.valorDevolvido)),0);
   return { entradas, despesas, saldoPrevisto: entradas - despesas, recebido, pago, saldoRealizado: recebido - pago, abertoReceita, abertoDespesa, vencido, receitasOp, despesasOp, lucroOperacional, margemLucro, porCentro, porPlano, porReferencia, porFilial, porUnidade, proximos, reservasSaldo, emprestimosAberto };
 }
@@ -330,8 +424,8 @@ function renderDashboard(db) {
       <div class="hero-item"><span>Vencido</span><strong class="negative">${brl(d.vencido)}</strong></div>
     </div>
   </section>
-  <div class="metrics metrics-compact">${cardMetric('Em aberto', brl(d.abertoReceita - d.abertoDespesa), '')}${cardMetric('Recebido', brl(d.recebido), 'positive')}${cardMetric('Pago', brl(d.pago), 'negative')}${cardMetric('Margem operacional', pct(d.margemLucro), d.margemLucro>=0?'positive':'negative')}${cardMetric('Reservas', brl(d.reservasSaldo), 'positive')}${cardMetric('Empréstimos em aberto', brl(d.emprestimosAberto), 'negative')}</div>
-  <div class="grid grid-2 dashboard-row"><div class="card"><h3>Próximos lançamentos</h3><div class="table-wrap"><table class="dashboard-table"><thead><tr><th>Lançamento</th><th>Unidade</th><th>Tipo</th><th>Vencimento</th><th>Status</th><th class="right">Valor</th></tr></thead><tbody>${prox || '<tr><td colspan="6">Sem lançamentos pendentes.</td></tr>'}</tbody></table></div></div><div class="card"><h3>Resultado por unidade de negócio</h3><div class="table-wrap"><table class="dashboard-table"><tbody>${tableRows(d.porUnidade)}</tbody></table></div></div></div>`);
+  <div class="metrics metrics-compact">${cardMetric('Em aberto', brl(d.abertoReceita - d.abertoDespesa), '')}${cardMetric('Recebido', brl(d.recebido), 'positive')}${cardMetric('Pago', brl(d.pago), 'negative')}${cardMetric('Margem operacional', pct(d.margemLucro), d.margemLucro>=0?'positive':'negative')}${cardMetric('Reservas/retiradas', brl(d.reservasSaldo), d.reservasSaldo>=0?'positive':'negative')}${cardMetric('Empréstimos em aberto', brl(d.emprestimosAberto), 'negative')}</div>
+  <div class="grid grid-2 dashboard-row"><div class="card"><h3>Próximas Operações</h3><div class="table-wrap"><table class="dashboard-table"><thead><tr><th>Lançamento</th><th>Unidade</th><th>Tipo</th><th>Vencimento</th><th>Status</th><th class="right">Valor</th></tr></thead><tbody>${prox || '<tr><td colspan="6">Sem lançamentos pendentes.</td></tr>'}</tbody></table></div></div><div class="card"><h3>Resultado por unidade de negócio</h3><div class="table-wrap"><table class="dashboard-table"><tbody>${tableRows(d.porUnidade)}</tbody></table></div></div></div>`);
 }
 function tableRows(obj) { return Object.entries(obj).sort((a,b)=>Math.abs(b[1])-Math.abs(a[1])).map(([k,v])=>`<tr><td>${esc(k)}</td><td class="right ${v>=0?'positive':'negative'}">${brl(v)}</td></tr>`).join('') || '<tr><td>Sem dados.</td><td></td></tr>'; }
 
@@ -347,7 +441,7 @@ function horizontalChart(title, subtitle, entries, opts={}) {
 }
 function receitaDespesaPorCompetencia(db) {
   const grupos = {};
-  for (const l of db.lancamentos.filter(isValidLancamento)) {
+  for (const l of visibleLancamentos(db).filter(isValidLancamento)) {
     const key = l.competencia || 'Sem competência';
     grupos[key] ||= { competencia:key, receita:0, despesa:0, lucro:0 };
     if (l.tipo === 'receita') grupos[key].receita += num(l.valorProvisionado);
@@ -364,14 +458,14 @@ function seriesCompetenciaChart(db) {
 }
 function despesaPorCentro(db) {
   const m = maps(db), out = {};
-  for (const l of db.lancamentos.filter(l=>isValidLancamento(l) && l.tipo === 'despesa')) {
+  for (const l of visibleLancamentos(db).filter(l=>isValidLancamento(l) && l.tipo === 'despesa')) {
     const k = m.centros[l.centroCustoId]?.nome || 'Sem centro';
     out[k] = (out[k] || 0) + num(l.valorProvisionado);
   }
   return out;
 }
 function statusChart(db) {
-  const validos = db.lancamentos.filter(isValidLancamento);
+  const validos = visibleLancamentos(db).filter(isValidLancamento);
   const out = {};
   for (const l of validos) out[statusLabel(l.status,l.tipo)] = (out[statusLabel(l.status,l.tipo)] || 0) + 1;
   const boxes = Object.entries(out).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<div class="status-box"><span>${esc(k)}</span><strong>${v}</strong></div>`).join('');
@@ -380,7 +474,7 @@ function statusChart(db) {
 function tetoChart(db) {
   const m = maps(db);
   const rows = db.referencias.map(ref => {
-    const gasto = db.lancamentos.filter(l=>isValidLancamento(l) && l.tipo==='despesa' && l.referenciaId===ref.id).reduce((s,l)=>s+num(l.valorProvisionado),0);
+    const gasto = visibleLancamentos(db).filter(l=>isValidLancamento(l) && l.tipo==='despesa' && l.referenciaId===ref.id).reduce((s,l)=>s+num(l.valorProvisionado),0);
     const teto = num(ref.tetoGasto);
     const uso = teto > 0 ? gasto * 100 / teto : 0;
     const b = tetoBadge(teto > 0 ? uso : NaN);
@@ -392,7 +486,7 @@ function tetoChart(db) {
 function renderGraficos(db) {
   const d = calcularDashboard(db);
   return layout('Gráficos','graficos', header('Gráficos','Indicadores visuais para apresentação e leitura gerencial do ISP.', '<a class="btn" href="/relatorios">Ver relatórios</a>') +
-  `<div class="metrics metrics-compact">${cardMetric('Receitas', brl(d.entradas), 'positive')}${cardMetric('Despesas', brl(d.despesas), 'negative')}${cardMetric('Resultado previsto', brl(d.saldoPrevisto), d.saldoPrevisto>=0?'positive':'negative')}${cardMetric('Margem operacional', pct(d.margemLucro), d.margemLucro>=0?'positive':'negative')}${cardMetric('Reservas', brl(d.reservasSaldo), 'positive')}${cardMetric('Vencido', brl(d.vencido), 'negative')}</div>
+  `<div class="metrics metrics-compact">${cardMetric('Receitas', brl(d.entradas), 'positive')}${cardMetric('Despesas', brl(d.despesas), 'negative')}${cardMetric('Resultado previsto', brl(d.saldoPrevisto), d.saldoPrevisto>=0?'positive':'negative')}${cardMetric('Margem operacional', pct(d.margemLucro), d.margemLucro>=0?'positive':'negative')}${cardMetric('Reservas/retiradas', brl(d.reservasSaldo), d.reservasSaldo>=0?'positive':'negative')}${cardMetric('Vencido', brl(d.vencido), 'negative')}</div>
   <div class="chart-grid">
     ${seriesCompetenciaChart(db)}
     ${horizontalChart('Despesas por centro de custo','Total provisionado em despesas, por centro.', topEntries(despesaPorCentro(db), 8, false), {neutral:true})}
@@ -403,10 +497,56 @@ function renderGraficos(db) {
   </div>`);
 }
 
-function renderLancamentos(db) {
+function selected(v, expected) { return String(v || '') === String(expected || '') ? 'selected' : ''; }
+function qval(params, key) { return params?.get?.(key) || ''; }
+function filterLancamentos(list, db, params) {
   const m = maps(db);
-  const rows = db.lancamentos.slice().sort((a,b)=>b.vencimento.localeCompare(a.vencimento)).map(l=>`<tr><td><strong>${esc(l.descricao)}</strong><br><small>${esc(m.credores[l.credorDevedorId]?.nome || '-')}</small></td><td><span class="${tipoClass(l.tipo)}">${tipoLabel(l.tipo)}</span></td><td>${esc(m.unidades[l.unidadeNegocioId]?.nome || '-')}<br><small>${esc((m.filiais[l.filialId]?.codigo || '') + ' - ' + (m.filiais[l.filialId]?.nome || '-'))}</small></td><td>${esc(m.centros[l.centroCustoId]?.nome || '-')}<br><small>${esc(m.planos[l.planoContaId]?.nome || '-')} / ${esc(m.referencias[l.referenciaId]?.nome || '-')}</small></td><td>${monthBR(l.competencia)}<br><small>Venc.: ${dateBR(l.vencimento)}</small></td><td>${l.parcelaTotal>1?`${l.parcelaNumero}/${l.parcelaTotal}`:'Única'}</td><td><span class="badge ${badge(l.status)}">${statusLabel(l.status,l.tipo)}</span></td><td class="right">${brl(l.valorProvisionado)}</td><td class="actions">${!realizado(l)&&l.status!=='cancelado'?`<a class="small btn" href="/lancamentos/${l.id}/baixar">Baixar</a>`:''}${l.status!=='cancelado'?`<form method="post" action="/lancamentos/${l.id}/cancelar"><button class="small ghost">Cancelar</button></form>`:''}</td></tr>`).join('');
-  return layout('Lançamentos','lancamentos', header('Lançamentos','Consulta dos lançamentos cadastrados. O formulário de novo lançamento fica em tela separada.', '<a class="btn" href="/lancamentos/novo">Novo lançamento</a>') + `<table><thead><tr><th>Descrição</th><th>Tipo</th><th>Unidade/Filial</th><th>Classificação</th><th>Competência</th><th>Parcela</th><th>Status</th><th class="right">Valor</th><th>Ações</th></tr></thead><tbody>${rows || '<tr><td colspan="9">Nenhum lançamento cadastrado.</td></tr>'}</tbody></table>`);
+  const valEq = (a,b) => Math.abs(num(a) - num(b)) < 0.01;
+  return list.filter(l => {
+    if (qval(params,'vencimentoDe') && l.vencimento < qval(params,'vencimentoDe')) return false;
+    if (qval(params,'vencimentoAte') && l.vencimento > qval(params,'vencimentoAte')) return false;
+    if (qval(params,'competencia') && l.competencia !== qval(params,'competencia')) return false;
+    if (qval(params,'unidadeNegocioId') && l.unidadeNegocioId !== qval(params,'unidadeNegocioId')) return false;
+    if (qval(params,'filialId') && l.filialId !== qval(params,'filialId')) return false;
+    if (qval(params,'tipo') && l.tipo !== qval(params,'tipo')) return false;
+    if (qval(params,'centroCustoId') && l.centroCustoId !== qval(params,'centroCustoId')) return false;
+    if (qval(params,'planoContaId') && l.planoContaId !== qval(params,'planoContaId')) return false;
+    if (qval(params,'referenciaId') && l.referenciaId !== qval(params,'referenciaId')) return false;
+    if (qval(params,'credorDevedorId') && l.credorDevedorId !== qval(params,'credorDevedorId')) return false;
+    if (qval(params,'status') && l.status !== qval(params,'status')) return false;
+    if (qval(params,'formaPagamentoId') && l.formaPagamentoId !== qval(params,'formaPagamentoId')) return false;
+    if (qval(params,'dataPagamento') && l.dataPagamento !== qval(params,'dataPagamento')) return false;
+    if (qval(params,'valor') && !valEq(l.valorProvisionado, qval(params,'valor'))) return false;
+    if (qval(params,'valorBaixado') && !valEq(l.valorBaixado, qval(params,'valorBaixado'))) return false;
+    const nota = normalize(l.notaNumero || '');
+    if (qval(params,'notaNumero') && !nota.includes(normalize(qval(params,'notaNumero')))) return false;
+    return true;
+  });
+}
+function renderLancamentos(db, params=new URLSearchParams()) {
+  const m = maps(db);
+  const base = visibleLancamentos(db).filter(isValidLancamento);
+  const filtrados = filterLancamentos(base, db, params).sort((a,b)=>String(b.vencimento).localeCompare(String(a.vencimento)));
+  const filtro = `<form method="get" action="/lancamentos" class="card filter-card"><h3>Filtros de pesquisa</h3><div class="filter-grid">
+    <label>Vencimento de<input type="date" name="vencimentoDe" value="${esc(qval(params,'vencimentoDe'))}"></label>
+    <label>Vencimento até<input type="date" name="vencimentoAte" value="${esc(qval(params,'vencimentoAte'))}"></label>
+    <label>Competência<input type="month" name="competencia" value="${esc(qval(params,'competencia'))}"></label>
+    <label>Unidade de negócio<select name="unidadeNegocioId">${opts(db.unidadesNegocio, qval(params,'unidadeNegocioId'))}</select></label>
+    <label>Filial<select name="filialId">${opts(db.filiais, qval(params,'filialId'))}</select></label>
+    <label>Tipo<select name="tipo"><option value="">Todos</option><option value="despesa" ${selected(qval(params,'tipo'),'despesa')}>Despesa</option><option value="receita" ${selected(qval(params,'tipo'),'receita')}>Receita</option></select></label>
+    <label>Centro de custo<select name="centroCustoId">${opts(db.centrosCusto, qval(params,'centroCustoId'))}</select></label>
+    <label>Plano de contas<select name="planoContaId">${opts(db.planosContas, qval(params,'planoContaId'))}</select></label>
+    <label>Referência<select name="referenciaId">${opts(db.referencias, qval(params,'referenciaId'))}</select></label>
+    <label>Valor<input name="valor" value="${esc(qval(params,'valor'))}" placeholder="0,00"></label>
+    <label>Credor/Devedor<select name="credorDevedorId">${opts(db.credoresDevedores, qval(params,'credorDevedorId'))}</select></label>
+    <label>Status<select name="status"><option value="">Todos</option>${['provisionado','pendente','aprovado','pago','baixado','cancelado'].map(st=>`<option value="${st}" ${selected(qval(params,'status'),st)}>${statusLabel(st)}</option>`).join('')}</select></label>
+    <label>Nota/NF<input name="notaNumero" value="${esc(qval(params,'notaNumero'))}" placeholder="0000"></label>
+    <label>Forma de pagamento<select name="formaPagamentoId">${opts(db.formasPagamento, qval(params,'formaPagamentoId'))}</select></label>
+    <label>Data de pagamento<input type="date" name="dataPagamento" value="${esc(qval(params,'dataPagamento'))}"></label>
+    <label>Valor baixado<input name="valorBaixado" value="${esc(qval(params,'valorBaixado'))}" placeholder="0,00"></label>
+  </div><div class="filter-actions"><button>Pesquisar</button><a class="btn ghost" href="/lancamentos">Limpar</a></div></form>`;
+  const rows = filtrados.map(l=>{ const ri = rateioInfo(db,l); return `<tr><td><strong>${esc(l.descricao)}</strong><br><small>${esc(m.credores[l.credorDevedorId]?.nome || '-')}</small>${ri.comRateio?`<br><span class="pill-rateio">Com rateio · ${ri.linhas.length} filiais</span>`:''}</td><td><span class="${tipoClass(l.tipo)}">${tipoLabel(l.tipo)}</span></td><td>${esc(m.unidades[l.unidadeNegocioId]?.nome || '-')}<br><small>${esc((m.filiais[l.filialId]?.codigo || '') + ' - ' + (m.filiais[l.filialId]?.nome || '-'))}</small></td><td>${esc(m.centros[l.centroCustoId]?.nome || '-')}<br><small>${esc(m.planos[l.planoContaId]?.nome || '-')} / ${esc(m.referencias[l.referenciaId]?.nome || '-')}</small></td><td>${monthBR(l.competencia)}<br><small>Venc.: ${dateBR(l.vencimento)}</small>${l.dataPagamento?`<br><small>Pag.: ${dateBR(l.dataPagamento)}</small>`:''}</td><td>${l.parcelaTotal>1?`${l.parcelaNumero}/${l.parcelaTotal}`:'Única'}</td><td><span class="badge ${badge(l.status)}">${statusLabel(l.status,l.tipo)}</span></td><td class="right">${brl(l.valorProvisionado)}${num(l.valorBaixado)?`<br><small>Baixado: ${brl(l.valorBaixado)}</small>`:''}</td><td class="actions">${!realizado(l)&&l.status!=='cancelado'?`<a class="small btn" href="/lancamentos/${l.id}/baixar">Baixar</a>`:''}${l.status!=='cancelado'?`<form method="post" action="/lancamentos/${l.id}/cancelar"><button class="small ghost">Cancelar</button></form>`:''}</td></tr>`; }).join('');
+  return layout('Lançamentos','lancamentos', header('Lançamentos','Consulta dos lançamentos cadastrados com filtros operacionais.', '<a class="btn" href="/lancamentos/novo">Novo lançamento</a>') + sensitiveNotice(db) + filtro + `<div class="table-wrap"><table><thead><tr><th>Descrição</th><th>Tipo</th><th>Unidade/Filial</th><th>Classificação</th><th>Competência</th><th>Parcela</th><th>Status</th><th class="right">Valor</th><th>Ações</th></tr></thead><tbody>${rows || '<tr><td colspan="9">Nenhum lançamento encontrado.</td></tr>'}</tbody></table></div>`);
 }
 
 function rateioInputs(db) {
@@ -459,9 +599,14 @@ function renderReservas(db) {
 }
 function renderEmprestimos(db) {
   const aberto = db.emprestimos.filter(e=>e.status !== 'quitado').reduce((s,e)=>s+(num(e.valorOriginal)-num(e.valorDevolvido)),0);
-  const rows = db.emprestimos.slice().sort((a,b)=>b.dataEmprestimo.localeCompare(a.dataEmprestimo)).map(e=>`<tr><td><strong>${esc(e.descricao)}</strong><br><small>${esc(e.parte)}</small></td><td>${dateBR(e.dataEmprestimo)}</td><td>${dateBR(e.dataPrevistaDevolucao)}</td><td class="right">${brl(e.valorOriginal)}</td><td class="right positive">${brl(e.valorDevolvido)}</td><td class="right">${brl(num(e.valorOriginal)-num(e.valorDevolvido))}</td><td><span class="badge ${e.status==='quitado'?'success':'info'}">${esc(e.status)}</span></td><td>${e.status!=='quitado'?`<form method="post" action="/emprestimos/${e.id}/devolver" class="inline-form"><input name="valor" placeholder="Valor" required><button class="small">Devolver</button></form>`:''}</td></tr>`).join('');
-  return layout('Empréstimos e devoluções','emprestimos', header('Empréstimos e devoluções','Controle apartado de empréstimos internos, adiantamentos e respectivas devoluções.', `<strong>Em aberto: ${brl(aberto)}</strong>`) + `<div class="card"><form method="post" action="/emprestimos" class="form"><div class="form-grid"><label>Data empréstimo<input type="date" name="dataEmprestimo" required></label><label>Previsão devolução<input type="date" name="dataPrevistaDevolucao"></label><label>Parte envolvida<input name="parte" placeholder="Pessoa/empresa" required></label><label>Valor<input name="valorOriginal" placeholder="0,00" required></label></div><label>Descrição<input name="descricao" required></label><label>Observação<textarea name="observacao"></textarea></label><button>Cadastrar empréstimo</button></form></div><table><thead><tr><th>Descrição</th><th>Data</th><th>Previsão</th><th class="right">Original</th><th class="right">Devolvido</th><th class="right">Saldo</th><th>Status</th><th>Ação</th></tr></thead><tbody>${rows || '<tr><td colspan="8">Sem empréstimos cadastrados.</td></tr>'}</tbody></table>`);
+  const rows = db.emprestimos.slice().sort((a,b)=>String(b.dataEmprestimo).localeCompare(String(a.dataEmprestimo))).map(e=>{
+    const saldo = num(e.valorOriginal)-num(e.valorDevolvido);
+    const devols = (e.devolucoes || []).slice(-2).map(d=>`${dateBR(d.dataDevolucao)} · ${brl(d.valor)}`).join('<br>');
+    return `<tr><td><strong>${esc(e.descricao)}</strong><br><small>${esc(e.parte)}</small>${e.parcelaTotal>1?`<br><span class="pill-rateio">Parcela ${e.parcelaNumero}/${e.parcelaTotal}</span>`:''}</td><td>${dateBR(e.dataEmprestimo)}</td><td>${dateBR(e.dataPrevistaDevolucao)}</td><td class="right">${brl(e.valorOriginal)}</td><td class="right positive">${brl(e.valorDevolvido)}</td><td class="right">${brl(saldo)}</td><td><span class="badge ${e.status==='quitado'?'success':'info'}">${esc(e.status)}</span></td><td>${devols || '-'}</td><td>${e.status!=='quitado'?`<form method="post" action="/emprestimos/${e.id}/devolver" class="inline-form"><input type="date" name="dataDevolucao" required><input name="valor" placeholder="Valor" required><button class="small">Devolver</button></form>`:''}</td></tr>`;
+  }).join('');
+  return layout('Empréstimos e devoluções','emprestimos', header('Empréstimos e devoluções','Controle de empréstimos internos, com devolução prevista, parcelamento e histórico de devoluções.', `<strong>Em aberto: ${brl(aberto)}</strong>`) + `<div class="card"><form method="post" action="/emprestimos" class="form"><div class="form-grid"><label>Data empréstimo<input type="date" name="dataEmprestimo" required></label><label>Primeira data de devolução<input type="date" name="dataPrevistaDevolucao" required></label><label>Parte envolvida<input name="parte" placeholder="Pessoa/empresa" required></label><label>Valor<input name="valorOriginal" placeholder="0,00" required></label><label>Quantidade de parcelas<input type="number" name="quantidadeParcelas" min="1" value="1"></label><label>Periodicidade<select name="periodicidade"><option value="mensal">Mensal</option><option value="intervalo">Por intervalo de dias</option></select></label><label>Intervalo em dias<input type="number" name="intervaloDias" min="1" placeholder="30"></label><label>Valor informado é<select name="valorModoParcelamento"><option value="por_parcela">Valor de cada parcela</option><option value="total_dividido">Total dividido pelas parcelas</option></select></label></div><label>Descrição<input name="descricao" required></label><label>Observação<textarea name="observacao"></textarea></label><button>Cadastrar empréstimo</button></form></div><div class="table-wrap"><table><thead><tr><th>Descrição</th><th>Data</th><th>Devolução prevista</th><th class="right">Original</th><th class="right">Devolvido</th><th class="right">Saldo</th><th>Status</th><th>Histórico</th><th>Ação</th></tr></thead><tbody>${rows || '<tr><td colspan="9">Sem empréstimos cadastrados.</td></tr>'}</tbody></table></div>`);
 }
+
 
 function tetoBadge(percentual) {
   if (!Number.isFinite(percentual)) return { cls:'neutral', label:'Sem teto' };
@@ -472,7 +617,7 @@ function tetoBadge(percentual) {
 function renderRelatorios(db) {
   const d = calcularDashboard(db), m = maps(db);
   const tetoRows = db.referencias.map(ref => {
-    const gasto = db.lancamentos.filter(l=>isValidLancamento(l) && l.tipo==='despesa' && l.referenciaId===ref.id).reduce((s,l)=>s+num(l.valorProvisionado),0);
+    const gasto = visibleLancamentos(db).filter(l=>isValidLancamento(l) && l.tipo==='despesa' && l.referenciaId===ref.id).reduce((s,l)=>s+num(l.valorProvisionado),0);
     const teto = num(ref.tetoGasto);
     const percTeto = teto > 0 ? gasto * 100 / teto : NaN;
     const b = tetoBadge(percTeto);
@@ -482,17 +627,47 @@ function renderRelatorios(db) {
   return layout('Relatórios','relatorios', header('Relatórios analíticos','Margem operacional desconsidera retiradas e reservas. O teto de gasto é avaliado por referência.', '<a class="btn" href="/export/lancamentos.csv">Exportar CSV</a>') + `<div class="metrics">${cardMetric('Receita operacional', brl(d.receitasOp), 'positive')}${cardMetric('Despesa operacional', brl(d.despesasOp), 'negative')}${cardMetric('Lucro operacional', brl(d.lucroOperacional), d.lucroOperacional>=0?'positive':'negative')}${cardMetric('% lucro', pct(d.margemLucro), d.margemLucro>=0?'positive':'negative')}</div><div class="grid grid-2"><div class="card"><h3>Centro de custo</h3><table><tbody>${tableRows(d.porCentro)}</tbody></table></div><div class="card"><h3>Filiais / Rateios</h3><table><tbody>${tableRows(d.porFilial)}</tbody></table></div></div><h2 class="section-title">Teto de gasto por referência</h2><table><thead><tr><th>Centro</th><th>Plano</th><th>Referência</th><th class="right">Teto</th><th class="right">Gasto</th><th class="right">Uso</th><th>Sinalização</th></tr></thead><tbody>${tetoRows}</tbody></table><h2 class="section-title">Logs de auditoria</h2><table><thead><tr><th>Data</th><th>Ação</th><th>Entidade</th><th>ID</th></tr></thead><tbody>${logs || '<tr><td colspan="4">Sem logs.</td></tr>'}</tbody></table>`);
 }
 
-function chipList(list) { return (list || []).map(i=>`<span class="chip">${esc(i.codigo ? `${i.codigo} - ${i.nome}` : i.nome)}</span>`).join('') || '<span class="muted">Sem cadastros.</span>'; }
+function chipList(list, formatter=null) { return (list || []).map(i=>`<span class="chip">${esc(formatter?formatter(i):(i.codigo ? `${i.codigo} - ${i.nome}` : i.nome))}</span>`).join('') || '<span class="muted">Sem cadastros.</span>'; }
+function renderUsuarios(db, err='') {
+  const rows = (db.usuarios || []).map(u=>`<tr><td><strong>${esc(u.nome)}</strong><br><small>${esc(u.email)}</small></td><td><span class="badge neutral">${esc(u.perfil)}</span></td><td>${canViewSensitive(u)?'<span class="badge success">Sim</span>':'<span class="badge neutral">Não</span>'}</td><td><span class="badge ${u.status==='ativo'?'success':'mutedBadge'}">${esc(u.status)}</span></td><td class="actions"><form method="post" action="/usuarios/${esc(u.id)}/toggle-sensivel"><button class="small ghost" ${u.perfil==='gestor'?'disabled title="Gestor sempre visualiza dados sensíveis"':''}>${canViewSensitive(u)?'Bloquear sensíveis':'Liberar sensíveis'}</button></form><form method="post" action="/usuarios/${esc(u.id)}/toggle-status"><button class="small ghost" ${u.id===currentUserContext?.id?'disabled title="Você não pode desativar seu próprio usuário"':''}>${u.status==='ativo'?'Desativar':'Ativar'}</button></form></td></tr>`).join('');
+  return layout('Usuários','usuarios', header('Usuários','Cadastro de acessos do cliente. O perfil Gestor administra usuários, parametrização e dados sensíveis.', '<a class="btn ghost" href="/parametrizacao#usuarios">Ver na parametrização</a>') + (err ? `<div class="error">${esc(err)}</div>` : '') + `<div class="grid grid-2"><div class="card"><h3>Novo usuário</h3><form method="post" action="/usuarios" class="form"><div class="form-grid-3"><label>Nome<input name="nome" placeholder="Nome do usuário" required></label><label>E-mail<input type="email" name="email" placeholder="usuario@empresa.com" required></label><label>Senha inicial<input type="password" name="senha" required></label><label>Perfil<select name="perfil"><option value="assistente">Assistente</option><option value="gestor">Gestor</option></select></label><label class="checkline"><input type="checkbox" name="podeVerDadosSensiveis"> Liberar dados sensíveis</label></div><p class="hint">Assistente sem liberação não visualiza lançamentos classificados em plano de contas sensível.</p><button>Criar usuário</button></form></div><div class="card"><h3>Regra de acesso</h3><p>Gestor: acesso total, inclusive parametrização, usuários e dados sensíveis.</p><p>Assistente: acesso operacional. Pode visualizar dados sensíveis somente quando liberado pelo gestor.</p></div></div><h2 class="section-title">Usuários cadastrados</h2><div class="table-wrap"><table><thead><tr><th>Usuário</th><th>Perfil</th><th>Dados sensíveis</th><th>Status</th><th>Ações</th></tr></thead><tbody>${rows || '<tr><td colspan="5">Nenhum usuário cadastrado.</td></tr>'}</tbody></table></div>`);
+}
+
+function createUsuarioFromBody(db, b) {
+  const email = String(b.email || '').trim();
+  if (!email) throw new Error('Informe o e-mail do usuário.');
+  if ((db.usuarios||[]).some(u=>normalize(u.email)===normalize(email))) throw new Error('E-mail já cadastrado.');
+  const perfil = b.perfil === 'gestor' ? 'gestor' : 'assistente';
+  const usuario = {
+    id:uid('usr'),
+    nome:String(b.nome || '').trim(),
+    email,
+    senhaHash:hashPassword(b.senha || ''),
+    perfil,
+    podeVerDadosSensiveis: perfil==='gestor' || b.podeVerDadosSensiveis==='on',
+    status:'ativo',
+    createdAt:new Date().toISOString()
+  };
+  if (!usuario.nome) throw new Error('Informe o nome do usuário.');
+  if (!b.senha) throw new Error('Informe uma senha inicial.');
+  db.usuarios.push(usuario);
+  addLog(db,'criar','usuarios',usuario.id,{email:usuario.email, perfil:usuario.perfil, usuario:currentUserContext?.email});
+  return usuario;
+}
+
 function renderParametrizacao(db) {
-  return layout('Parametrização','parametrizacao', header('Parametrização','Cadastros prévios utilizados nos lançamentos financeiros.', '') + `<div class="param-nav"><a href="#unidades">Unidades</a><a href="#filiais">Filiais</a><a href="#credores">Credores/Devedores</a><a href="#classificacoes">Classificações</a><a href="#pagamento">Pagamento/Bancos</a></div><div class="grid grid-2">
+  const userRows = (db.usuarios || []).map(u=>`<tr><td><strong>${esc(u.nome)}</strong><br><small>${esc(u.email)}</small></td><td>${esc(u.perfil)}</td><td>${canViewSensitive(u)?'<span class="badge success">Sim</span>':'<span class="badge neutral">Não</span>'}</td><td>${esc(u.status)}</td></tr>`).join('');
+  return layout('Parametrização','parametrizacao', header('Parametrização','Cadastros prévios, perfis de acesso e regras de classificação utilizadas nos lançamentos financeiros.', '') + `<div class="param-nav"><a href="#unidades">Unidades</a><a href="#filiais">Filiais</a><a href="#credores">Credores/Devedores</a><a href="#classificacoes">Classificações</a><a href="#pagamento">Pagamento/Bancos</a><a href="#usuarios">Usuários</a></div><div class="grid grid-2">
   <div class="card" id="unidades"><h3>Unidades de negócio</h3><div class="chips">${chipList(db.unidadesNegocio)}</div><form method="post" action="/parametrizacao/unidades" class="form"><label>Nome<input name="nome" placeholder="Loja Nilópolis" required></label><label>Descrição<input name="descricao"></label><button>Cadastrar unidade</button></form></div>
   <div class="card" id="filiais"><h3>Filiais</h3><div class="chips">${chipList(db.filiais)}</div><form method="post" action="/parametrizacao/filiais" class="form"><div class="form-grid"><label>Código<input name="codigo" required></label><label>Nome<input name="nome" required></label><label>Razão social<input name="razaoSocial"></label><label>CNPJ<input name="cnpj"></label></div><button>Cadastrar filial</button></form></div>
   <div class="card" id="credores"><h3>Credores / Devedores</h3><div class="chips">${chipList(db.credoresDevedores)}</div><form method="post" action="/parametrizacao/credores" class="form"><div class="form-grid"><label>Nome/Razão social<input name="nome" required></label><label>Tipo<select name="tipo"><option value="credor">Credor</option><option value="devedor">Devedor</option></select></label><label>Natureza<select name="natureza"><option value="fornecedor">Fornecedor</option><option value="funcionario">Funcionário</option><option value="prestador">Prestador</option><option value="socio">Sócio</option><option value="cliente_outros">Cliente/Outros</option></select></label><label>CPF/CNPJ<input name="cpfCnpj"></label><label>E-mail<input name="email"></label><label>Contato<input name="contato"></label></div><button>Cadastrar</button></form></div>
   <div class="card" id="pagamento"><h3>Forma de pagamento</h3><div class="chips">${chipList(db.formasPagamento)}</div><form method="post" action="/parametrizacao/formas-pagamento" class="form"><label>Nova forma<input name="nome" placeholder="Transferência" required></label><button>Cadastrar forma</button></form><h3>Bancos</h3><div class="chips">${chipList(db.bancos)}</div><form method="post" action="/parametrizacao/bancos" class="form"><div class="form-grid"><label>Banco<input name="nome" required></label><label>Agência<input name="agencia"></label><label>Conta<input name="conta"></label></div><button>Cadastrar banco</button></form></div>
-  <div class="card" id="classificacoes"><h3>Centro de custo</h3><div class="chips">${chipList(db.centrosCusto)}</div><form method="post" action="/parametrizacao/centros" class="form"><label>Novo centro<input name="nome" required></label><button>Cadastrar centro</button></form><h3>Plano de contas</h3><div class="chips">${chipList(db.planosContas)}</div><form method="post" action="/parametrizacao/planos" class="form"><label>Novo plano<input name="nome" required></label><button>Cadastrar plano</button></form></div>
+  <div class="card" id="classificacoes"><h3>Centro de custo</h3><div class="chips">${chipList(db.centrosCusto)}</div><form method="post" action="/parametrizacao/centros" class="form"><label>Novo centro<input name="nome" required></label><button>Cadastrar centro</button></form><h3>Plano de contas</h3><div class="chips">${chipList(db.planosContas, i => `${i.nome}${i.dadosSensiveis?' · sensível':''}`)}</div><form method="post" action="/parametrizacao/planos" class="form"><label>Novo plano<input name="nome" required></label><label class="checkline"><input type="checkbox" name="dadosSensiveis"> Dados sensíveis</label><button>Cadastrar plano</button></form></div>
   <div class="card"><h3>Referências com teto de gasto</h3><div class="chips">${chipList(db.referencias)}</div><form method="post" action="/parametrizacao/referencias" class="form"><div class="form-grid"><label>Referência<input name="nome" required></label><label>Centro<select name="centroCustoId">${opts(db.centrosCusto)}</select></label><label>Plano<select name="planoContaId">${opts(db.planosContas)}</select></label><label>Teto de gasto<input name="tetoGasto" placeholder="0,00"></label></div><button>Cadastrar referência</button></form><h3>Parcelas</h3><div class="chips">${chipList(db.parcelasTipos)}</div><form method="post" action="/parametrizacao/parcelas" class="form"><label>Nova parcela<input name="nome" required></label><button>Cadastrar parcela</button></form></div>
+  <div class="card wide-card" id="usuarios"><h3>Usuários e dados sensíveis</h3><p class="hint">O perfil gestor acessa dados sensíveis por padrão. O assistente só acessa se a opção for liberada.</p><table><thead><tr><th>Usuário</th><th>Perfil</th><th>Dados sensíveis</th><th>Status</th></tr></thead><tbody>${userRows}</tbody></table>${canManage(currentUserContext)?`<form method="post" action="/parametrizacao/usuarios" class="form"><div class="form-grid"><label>Nome<input name="nome" required></label><label>E-mail<input type="email" name="email" required></label><label>Senha<input type="password" name="senha" required></label><label>Perfil<select name="perfil"><option value="gestor">Gestor</option><option value="assistente">Assistente</option></select></label><label class="checkline"><input type="checkbox" name="podeVerDadosSensiveis"> Liberar dados sensíveis</label></div><button>Cadastrar usuário</button></form>`:'<p class="notice">Somente gestor pode cadastrar usuários.</p>'}</div>
   </div>`);
 }
+
 
 function criarLancamentosComParcelas(db, body, files) {
   const required = ['tipo','descricao','credorDevedorId','filialId','unidadeNegocioId','centroCustoId','planoContaId','referenciaId','parcelaTipoId','competencia','vencimento','valorProvisionado'];
@@ -537,7 +712,7 @@ function csv(db) {
   const m = maps(db);
   const header = ['tipo','descricao','unidade_negocio','credor_devedor','filial','centro_custo','plano_contas','referencia','competencia','vencimento','parcela','status','valor_provisionado','nota_nf','forma_pagamento','banco','data_pagamento','valor_baixado','valor_multa'];
   const rows = [header.join(';')];
-  for (const l of db.lancamentos) rows.push([l.tipo,l.descricao,m.unidades[l.unidadeNegocioId]?.nome||'',m.credores[l.credorDevedorId]?.nome||'',`${m.filiais[l.filialId]?.codigo||''} - ${m.filiais[l.filialId]?.nome||''}`,m.centros[l.centroCustoId]?.nome||'',m.planos[l.planoContaId]?.nome||'',m.referencias[l.referenciaId]?.nome||'',l.competencia,l.vencimento,`${l.parcelaNumero}/${l.parcelaTotal}`,statusLabel(l.status,l.tipo),String(l.valorProvisionado).replace('.',','),l.notaNumero||'',m.formas[l.formaPagamentoId]?.nome||'',m.bancos[l.bancoId]?.nome||'',l.dataPagamento||'',String(l.valorBaixado||0).replace('.',','),String(l.valorMulta||0).replace('.',',')].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(';'));
+  for (const l of visibleLancamentos(db)) rows.push([l.tipo,l.descricao,m.unidades[l.unidadeNegocioId]?.nome||'',m.credores[l.credorDevedorId]?.nome||'',`${m.filiais[l.filialId]?.codigo||''} - ${m.filiais[l.filialId]?.nome||''}`,m.centros[l.centroCustoId]?.nome||'',m.planos[l.planoContaId]?.nome||'',m.referencias[l.referenciaId]?.nome||'',l.competencia,l.vencimento,`${l.parcelaNumero}/${l.parcelaTotal}`,statusLabel(l.status,l.tipo),String(l.valorProvisionado).replace('.',','),l.notaNumero||'',m.formas[l.formaPagamentoId]?.nome||'',m.bancos[l.bancoId]?.nome||'',l.dataPagamento||'',String(l.valorBaixado||0).replace('.',','),String(l.valorMulta||0).replace('.',',')].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(';'));
   return rows.join('\n');
 }
 function staticFile(base, pathname, res) {
@@ -556,21 +731,40 @@ async function handle(req,res) {
   if (p.startsWith('/uploads/')) return staticFile('uploads', p, res);
   const db = readDb();
   try {
+    if (req.method === 'GET' && p === '/login') return send(res,200,renderLogin());
+    if (req.method === 'POST' && p === '/login') {
+      const {fields:b}=await parseBody(req);
+      const user = (db.usuarios || []).find(u => normalize(u.email) === normalize(b.email) && u.status === 'ativo');
+      if (!user || user.senhaHash !== hashPassword(b.senha || '')) return send(res,401,renderLogin('E-mail ou senha inválidos.'));
+      addLog(db,'login','usuarios',user.id,{email:user.email}); writeDb(db);
+      return setSession(res, user);
+    }
+    if (req.method === 'POST' && p === '/logout') return clearSession(req, res);
+
+    const user = currentUser(req, db);
+    if (!user) return redirect(res, '/login');
+    currentUserContext = user;
+
     if (req.method==='GET' && p==='/') return send(res,200,renderDashboard(db));
     if (req.method==='GET' && p==='/graficos') return send(res,200,renderGraficos(db));
-    if (req.method==='GET' && p==='/lancamentos') return send(res,200,renderLancamentos(db));
+    if (req.method==='GET' && p==='/lancamentos') return send(res,200,renderLancamentos(db, url.searchParams));
     if (req.method==='GET' && p==='/lancamentos/novo') return send(res,200,renderNovoLancamento(db));
-    if (req.method==='GET' && p==='/rateios') return send(res,200,renderRateios(db));
-    if (req.method==='GET' && p==='/reservas') return send(res,200,renderReservas(db));
+    if (req.method==='GET' && p==='/rateios') return send(res,200,renderRateios(visibleDb(db)));
+    if (req.method==='GET' && p==='/reservas') return redirect(res,'/lancamentos');
     if (req.method==='GET' && p==='/emprestimos') return send(res,200,renderEmprestimos(db));
     if (req.method==='GET' && p==='/relatorios') return send(res,200,renderRelatorios(db));
-    if (req.method==='GET' && p==='/parametrizacao') return send(res,200,renderParametrizacao(db));
+    if (req.method==='GET' && p==='/parametrizacao') { if (!canManage(user)) return send(res,403,layout('Acesso restrito','parametrizacao',header('Acesso restrito','Somente o perfil Gestor pode acessar a área de parametrização.'))); return send(res,200,renderParametrizacao(db)); }
+    if (req.method==='GET' && p==='/usuarios') { if (!canManage(user)) return send(res,403,layout('Acesso restrito','usuarios',header('Acesso restrito','Somente o perfil Gestor pode administrar usuários.'))); return send(res,200,renderUsuarios(db)); }
     if (req.method==='GET' && p==='/api/dashboard') return send(res,200,JSON.stringify(calcularDashboard(db),null,2),'application/json; charset=utf-8');
     if (req.method==='GET' && p==='/api/graficos') return send(res,200,JSON.stringify({dashboard:calcularDashboard(db), competencias:receitaDespesaPorCompetencia(db)},null,2),'application/json; charset=utf-8');
-    if (req.method==='GET' && p==='/api/lancamentos') return send(res,200,JSON.stringify(db.lancamentos,null,2),'application/json; charset=utf-8');
+    if (req.method==='GET' && p==='/api/lancamentos') return send(res,200,JSON.stringify(visibleLancamentos(db),null,2),'application/json; charset=utf-8');
     if (req.method==='GET' && p==='/export/lancamentos.csv') { res.writeHead(200, {'Content-Type':'text/csv; charset=utf-8','Content-Disposition':'attachment; filename="glinkfinance-lancamentos.csv"'}); return res.end(csv(db)); }
     const baixarGet = p.match(/^\/lancamentos\/([^/]+)\/baixar$/);
-    if (req.method==='GET' && baixarGet) return send(res,200,renderBaixarLancamento(db, baixarGet[1]));
+    if (req.method==='GET' && baixarGet) {
+      const l = find(db.lancamentos, baixarGet[1]);
+      if (l && isSensitiveLancamento(db,l) && !canViewSensitive(user)) return send(res,403,layout('Acesso negado','lancamentos',header('Acesso negado','Este lançamento contém dados sensíveis.')));
+      return send(res,200,renderBaixarLancamento(db, baixarGet[1]));
+    }
 
     if (req.method==='POST' && p==='/lancamentos') {
       const {fields, files}=await parseBody(req);
@@ -580,19 +774,56 @@ async function handle(req,res) {
     const baixar = p.match(/^\/lancamentos\/([^/]+)\/baixar$/);
     if (req.method==='POST' && baixar) {
       const l=find(db.lancamentos, baixar[1]); if(!l) return send(res,404,'Lançamento não encontrado','text/plain');
+      if (isSensitiveLancamento(db,l) && !canViewSensitive(user)) return send(res,403,'Acesso negado','text/plain');
       const {fields:b, files}=await parseBody(req);
       l.status=b.status || 'baixado'; l.dataPagamento=b.dataPagamento || today(); l.dataRealizacao=l.dataPagamento; l.valorBaixado=money(b.valorBaixado); l.valorRealizado=l.valorBaixado; l.valorMulta=money(b.valorMulta); l.formaPagamentoId=b.formaPagamentoId || l.formaPagamentoId; l.bancoId=b.bancoId || l.bancoId;
       const comp = firstFile(files.anexoComprovante); if (comp) { l.comprovanteUrl=comp.url; l.comprovanteNome=comp.originalName; }
       if (b.observacaoBaixa) l.observacao = [l.observacao, `Baixa: ${b.observacaoBaixa}`].filter(Boolean).join('\n');
-      addLog(db,'baixar','lancamentos',l.id,{valor:l.valorBaixado,status:l.status}); writeDb(db); return redirect(res,'/lancamentos');
+      addLog(db,'baixar','lancamentos',l.id,{valor:l.valorBaixado,status:l.status, usuario:user.email}); writeDb(db); return redirect(res,'/lancamentos');
     }
     const cancelar = p.match(/^\/lancamentos\/([^/]+)\/cancelar$/);
-    if (req.method==='POST' && cancelar) { const l=find(db.lancamentos, cancelar[1]); if(!l) return send(res,404,'Lançamento não encontrado','text/plain'); l.status='cancelado'; addLog(db,'cancelar','lancamentos',l.id,{status:'cancelado'}); writeDb(db); return redirect(res,'/lancamentos'); }
+    if (req.method==='POST' && cancelar) { const l=find(db.lancamentos, cancelar[1]); if(!l) return send(res,404,'Lançamento não encontrado','text/plain'); if (isSensitiveLancamento(db,l) && !canViewSensitive(user)) return send(res,403,'Acesso negado','text/plain'); l.status='cancelado'; addLog(db,'cancelar','lancamentos',l.id,{status:'cancelado', usuario:user.email}); writeDb(db); return redirect(res,'/lancamentos'); }
 
-    if (req.method==='POST' && p==='/reservas') { const {fields:b}=await parseBody(req); const r={id:uid('res'), data:b.data, tipo:b.tipo, categoria:b.categoria||'', valor:money(b.valor), descricao:b.descricao, observacao:b.observacao||'', createdAt:new Date().toISOString()}; db.reservas.push(r); addLog(db,'criar','reservas',r.id,r); writeDb(db); return redirect(res,'/reservas'); }
-    if (req.method==='POST' && p==='/emprestimos') { const {fields:b}=await parseBody(req); const e={id:uid('emp'), dataEmprestimo:b.dataEmprestimo, dataPrevistaDevolucao:b.dataPrevistaDevolucao||'', parte:b.parte, valorOriginal:money(b.valorOriginal), valorDevolvido:0, descricao:b.descricao, observacao:b.observacao||'', status:'em_aberto', createdAt:new Date().toISOString()}; db.emprestimos.push(e); addLog(db,'criar','emprestimos',e.id,e); writeDb(db); return redirect(res,'/emprestimos'); }
+    if (req.method==='POST' && p==='/reservas') return redirect(res,'/lancamentos');
+    if (req.method==='POST' && p==='/emprestimos') {
+      const {fields:b}=await parseBody(req);
+      const q = Math.max(1, Math.min(120, parseInt(b.quantidadeParcelas || '1',10) || 1));
+      const totalInput = money(b.valorOriginal); const grupo = uid('empgrp'); const valores=[];
+      if (b.valorModoParcelamento === 'total_dividido' && q > 1) { let acc=0; for(let i=1;i<=q;i++){ const v=i===q?money(totalInput-acc):money(totalInput/q); acc+=v; valores.push(v); } }
+      else for(let i=1;i<=q;i++) valores.push(totalInput);
+      for (let i=0;i<q;i++) {
+        const dataPrevistaDevolucao = b.periodicidade === 'intervalo' ? addDays(b.dataPrevistaDevolucao, i * (parseInt(b.intervaloDias || '30',10)||30)) : addMonths(b.dataPrevistaDevolucao, i);
+        const e={id:uid('emp'), grupoParcelamentoId:grupo, parcelaNumero:i+1, parcelaTotal:q, dataEmprestimo:b.dataEmprestimo, dataPrevistaDevolucao, parte:b.parte, valorOriginal:valores[i], valorDevolvido:0, devolucoes:[], descricao:q>1?`${b.descricao} - Parcela ${i+1}/${q}`:b.descricao, observacao:b.observacao||'', status:'em_aberto', createdAt:new Date().toISOString()};
+        db.emprestimos.push(e);
+      }
+      addLog(db,'criar','emprestimos',grupo,{quantidade:q, usuario:user.email}); writeDb(db); return redirect(res,'/emprestimos');
+    }
     const devolver = p.match(/^\/emprestimos\/([^/]+)\/devolver$/);
-    if (req.method==='POST' && devolver) { const e=find(db.emprestimos, devolver[1]); if(!e) return send(res,404,'Empréstimo não encontrado','text/plain'); const {fields:b}=await parseBody(req); e.valorDevolvido=money(num(e.valorDevolvido)+money(b.valor)); if (e.valorDevolvido >= e.valorOriginal) e.status='quitado'; addLog(db,'devolver','emprestimos',e.id,{valor:b.valor}); writeDb(db); return redirect(res,'/emprestimos'); }
+    if (req.method==='POST' && devolver) { const e=find(db.emprestimos, devolver[1]); if(!e) return send(res,404,'Empréstimo não encontrado','text/plain'); const {fields:b}=await parseBody(req); const valor=money(b.valor); e.devolucoes ||= []; e.devolucoes.push({id:uid('dev'), dataDevolucao:b.dataDevolucao || today(), valor, createdAt:new Date().toISOString()}); e.valorDevolvido=money(num(e.valorDevolvido)+valor); if (e.valorDevolvido >= e.valorOriginal) e.status='quitado'; addLog(db,'devolver','emprestimos',e.id,{valor, dataDevolucao:b.dataDevolucao, usuario:user.email}); writeDb(db); return redirect(res,'/emprestimos'); }
+
+    if (req.method==='POST' && p==='/usuarios') {
+      if (!canManage(user)) return send(res,403,'Acesso negado','text/plain');
+      const {fields:b}=await parseBody(req);
+      try { createUsuarioFromBody(db,b); writeDb(db); return redirect(res,'/usuarios'); }
+      catch(e) { return send(res,400,renderUsuarios(db,e.message)); }
+    }
+    const toggleSensivel = p.match(/^\/usuarios\/([^/]+)\/toggle-sensivel$/);
+    if (req.method==='POST' && toggleSensivel) {
+      if (!canManage(user)) return send(res,403,'Acesso negado','text/plain');
+      const target=find(db.usuarios,toggleSensivel[1]); if(!target) return send(res,404,'Usuário não encontrado','text/plain');
+      if (target.perfil !== 'gestor') target.podeVerDadosSensiveis = !target.podeVerDadosSensiveis;
+      addLog(db,'alterar_acesso_sensivel','usuarios',target.id,{valor:target.podeVerDadosSensiveis, usuario:user.email}); writeDb(db); return redirect(res,'/usuarios');
+    }
+    const toggleStatus = p.match(/^\/usuarios\/([^/]+)\/toggle-status$/);
+    if (req.method==='POST' && toggleStatus) {
+      if (!canManage(user)) return send(res,403,'Acesso negado','text/plain');
+      const target=find(db.usuarios,toggleStatus[1]); if(!target) return send(res,404,'Usuário não encontrado','text/plain');
+      if (target.id === user.id) return send(res,400,renderUsuarios(db,'Você não pode desativar o próprio usuário logado.'));
+      target.status = target.status === 'ativo' ? 'inativo' : 'ativo';
+      addLog(db,'alterar_status','usuarios',target.id,{status:target.status, usuario:user.email}); writeDb(db); return redirect(res,'/usuarios');
+    }
+
+    if (req.method==='POST' && p.startsWith('/parametrizacao/') && !canManage(user)) return send(res,403,'Acesso negado','text/plain');
 
     if (req.method==='POST' && p==='/parametrizacao/unidades') { const {fields:b}=await parseBody(req); const item={id:uid('un'), nome:b.nome, descricao:b.descricao||'', status:'ativo'}; db.unidadesNegocio.push(item); writeDb(db); return redirect(res,'/parametrizacao#unidades'); }
     if (req.method==='POST' && p==='/parametrizacao/filiais') { const {fields:b}=await parseBody(req); const item={id:uid('fil'), codigo:b.codigo, nome:b.nome, razaoSocial:b.razaoSocial||'', cnpj:b.cnpj||'', percentualRateioPadrao:0, status:'ativa'}; db.filiais.push(item); writeDb(db); return redirect(res,'/parametrizacao#filiais'); }
@@ -600,12 +831,19 @@ async function handle(req,res) {
     if (req.method==='POST' && p==='/parametrizacao/formas-pagamento') { const {fields:b}=await parseBody(req); db.formasPagamento.push({id:uid('fp'), nome:b.nome, status:'ativo'}); writeDb(db); return redirect(res,'/parametrizacao#pagamento'); }
     if (req.method==='POST' && p==='/parametrizacao/bancos') { const {fields:b}=await parseBody(req); db.bancos.push({id:uid('bc'), nome:b.nome, agencia:b.agencia||'', conta:b.conta||'', status:'ativo'}); writeDb(db); return redirect(res,'/parametrizacao#pagamento'); }
     if (req.method==='POST' && p==='/parametrizacao/centros') { const {fields:b}=await parseBody(req); db.centrosCusto.push({id:uid('cc'), nome:b.nome, status:'ativo'}); writeDb(db); return redirect(res,'/parametrizacao#classificacoes'); }
-    if (req.method==='POST' && p==='/parametrizacao/planos') { const {fields:b}=await parseBody(req); db.planosContas.push({id:uid('pc'), nome:b.nome, status:'ativo'}); writeDb(db); return redirect(res,'/parametrizacao#classificacoes'); }
+    if (req.method==='POST' && p==='/parametrizacao/planos') { const {fields:b}=await parseBody(req); db.planosContas.push({id:uid('pc'), nome:b.nome, dadosSensiveis:b.dadosSensiveis==='on', status:'ativo'}); writeDb(db); return redirect(res,'/parametrizacao#classificacoes'); }
     if (req.method==='POST' && p==='/parametrizacao/referencias') { const {fields:b}=await parseBody(req); db.referencias.push({id:uid('ref'), nome:b.nome, centroCustoId:b.centroCustoId||'', planoContaId:b.planoContaId||'', tetoGasto:money(b.tetoGasto), status:'ativo'}); writeDb(db); return redirect(res,'/parametrizacao#classificacoes'); }
     if (req.method==='POST' && p==='/parametrizacao/parcelas') { const {fields:b}=await parseBody(req); db.parcelasTipos.push({id:uid('par'), nome:b.nome, modo:'custom', status:'ativo'}); writeDb(db); return redirect(res,'/parametrizacao#classificacoes'); }
+    if (req.method==='POST' && p==='/parametrizacao/usuarios') {
+      if (!canManage(user)) return send(res,403,'Acesso negado','text/plain');
+      const {fields:b}=await parseBody(req);
+      try { createUsuarioFromBody(db,b); writeDb(db); return redirect(res,'/parametrizacao#usuarios'); }
+      catch(e) { return send(res,400,layout('Erro','parametrizacao',header('Erro ao cadastrar usuário',e.message,'<a class="btn ghost" href="/parametrizacao#usuarios">Voltar</a>'))); }
+    }
 
     return send(res,404,layout('404','',header('404','Rota não encontrada')));
   } catch(e) { console.error(e); return send(res,500,`Erro interno: ${esc(e.message)}`,'text/html; charset=utf-8'); }
+  finally { currentUserContext = null; }
 }
 
 http.createServer(handle).listen(PORT, () => console.log(`GlinkFinance rodando em http://localhost:${PORT}`));

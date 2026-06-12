@@ -105,27 +105,38 @@
     {
       "id": "pc-colab",
       "nome": "Colaboradores",
-      "status": "ativo"
+      "status": "ativo",
+      "dadosSensiveis": true
     },
     {
       "id": "pc-veiculos",
       "nome": "Veículos",
-      "status": "ativo"
+      "status": "ativo",
+      "dadosSensiveis": false
     },
     {
       "id": "pc-mao-obra",
       "nome": "Mão de Obra",
-      "status": "ativo"
+      "status": "ativo",
+      "dadosSensiveis": false
     },
     {
       "id": "pc-fornecedores",
       "nome": "Fornecedores",
-      "status": "ativo"
+      "status": "ativo",
+      "dadosSensiveis": false
     },
     {
       "id": "pc-servicos",
       "nome": "Serviços",
-      "status": "ativo"
+      "status": "ativo",
+      "dadosSensiveis": false
+    },
+    {
+      "id": "pc-reservas",
+      "nome": "Reservas e Retiradas",
+      "status": "ativo",
+      "dadosSensiveis": false
     }
   ],
   "referencias": [
@@ -192,6 +203,22 @@
       "planoContaId": "pc-servicos",
       "tetoGasto": 0,
       "status": "ativo"
+    },
+    {
+      "id": "ref-reserva-tecnica",
+      "nome": "Reserva Técnica",
+      "status": "ativo",
+      "centroCustoId": "cc-rh",
+      "planoContaId": "pc-reservas",
+      "tetoGasto": 0
+    },
+    {
+      "id": "ref-retirada-socios",
+      "nome": "Retirada de Sócios",
+      "status": "ativo",
+      "centroCustoId": "cc-rh",
+      "planoContaId": "pc-reservas",
+      "tetoGasto": 0
     }
   ],
   "parcelasTipos": [
@@ -424,6 +451,41 @@
       "valorBaixado": 0,
       "dataPagamento": "",
       "valorMulta": 0
+    },
+    {
+      "id": "lan-res-seed-01",
+      "grupoParcelamentoId": "grp-res-seed",
+      "tipo": "despesa",
+      "descricao": "Constituição de reserva técnica",
+      "credorDevedorId": "cd-colab-01",
+      "filialId": "fil-1430",
+      "unidadeNegocioId": "un-loja-nilopolis",
+      "centroCustoId": "cc-rh",
+      "planoContaId": "pc-reservas",
+      "referenciaId": "ref-reserva-tecnica",
+      "parcelaTipoId": "par-unica",
+      "competencia": "2026-06",
+      "vencimento": "2026-06-30",
+      "parcelaNumero": 1,
+      "parcelaTotal": 1,
+      "valorProvisionado": 5000,
+      "valorRealizado": 0,
+      "dataRealizacao": "",
+      "status": "provisionado",
+      "rateioModo": "sem_rateio",
+      "observacao": "Reserva tratada como lançamento parametrizado.",
+      "notaTipo": "",
+      "notaNumero": "",
+      "anexoNotaUrl": "",
+      "anexoNotaNome": "",
+      "comprovanteUrl": "",
+      "comprovanteNome": "",
+      "formaPagamentoId": "fp-transferencia",
+      "bancoId": "bc-bb",
+      "valorBaixado": 0,
+      "dataPagamento": "",
+      "valorMulta": 0,
+      "createdAt": "2026-06-01T12:00:00.000Z"
     }
   ],
   "rateios": [
@@ -554,9 +616,68 @@
       "modo": "percentual",
       "percentual": 20,
       "valorRateado": 180
+    },
+    {
+      "id": "rat-res-seed-01",
+      "lancamentoId": "lan-res-seed-01",
+      "filialId": "fil-1430",
+      "modo": "sem_rateio",
+      "percentual": 100,
+      "valorRateado": 5000
     }
   ],
-  "logs": [],
+  "logs": [
+    {
+      "id": "log-6ac44474",
+      "createdAt": "2026-06-12T16:08:39.923Z",
+      "acao": "login",
+      "entidade": "usuarios",
+      "entidadeId": "usr-gestor",
+      "dados": {
+        "email": "gestor@glinkfinance.com"
+      }
+    },
+    {
+      "id": "log-e3c86cc3",
+      "createdAt": "2026-06-12T16:03:31.872Z",
+      "acao": "login",
+      "entidade": "usuarios",
+      "entidadeId": "usr-assistente",
+      "dados": {
+        "email": "assistente@glinkfinance.com"
+      }
+    },
+    {
+      "id": "log-fe73e540",
+      "createdAt": "2026-06-12T16:03:31.764Z",
+      "acao": "login",
+      "entidade": "usuarios",
+      "entidadeId": "usr-gestor",
+      "dados": {
+        "email": "gestor@glinkfinance.com"
+      }
+    },
+    {
+      "id": "log-41c07466",
+      "createdAt": "2026-06-12T16:02:47.614Z",
+      "acao": "login",
+      "entidade": "usuarios",
+      "entidadeId": "usr-assistente",
+      "dados": {
+        "email": "assistente@glinkfinance.com"
+      }
+    },
+    {
+      "id": "log-150279b6",
+      "createdAt": "2026-06-12T16:02:47.392Z",
+      "acao": "login",
+      "entidade": "usuarios",
+      "entidadeId": "usr-gestor",
+      "dados": {
+        "email": "gestor@glinkfinance.com"
+      }
+    }
+  ],
   "unidadesNegocio": [
     {
       "id": "un-loja-nilopolis",
@@ -667,7 +788,38 @@
       "descricao": "Empréstimo intercompany de teste",
       "observacao": "Exemplo genérico",
       "status": "em_aberto",
-      "createdAt": "2026-06-03T12:00:00.000Z"
+      "createdAt": "2026-06-03T12:00:00.000Z",
+      "grupoParcelamentoId": "empgrp-seed-01",
+      "parcelaNumero": 1,
+      "parcelaTotal": 1,
+      "devolucoes": [
+        {
+          "id": "dev-seed-01",
+          "dataDevolucao": "2026-06-20",
+          "valor": 1000,
+          "createdAt": "2026-06-20T12:00:00.000Z"
+        }
+      ]
+    }
+  ],
+  "usuarios": [
+    {
+      "id": "usr-gestor",
+      "nome": "Gestor Demo",
+      "email": "gestor@glinkfinance.com",
+      "senhaHash": "6d8764f4a5402397b12234c8c56e5b117f36a0ef7fa94a97f8d8a42983dc189e",
+      "perfil": "gestor",
+      "podeVerDadosSensiveis": true,
+      "status": "ativo"
+    },
+    {
+      "id": "usr-assistente",
+      "nome": "Assistente Demo",
+      "email": "assistente@glinkfinance.com",
+      "senhaHash": "4c406574190b51232957517eaff2239bf09758469f641f261c939e40aff5e530",
+      "perfil": "assistente",
+      "podeVerDadosSensiveis": false,
+      "status": "ativo"
     }
   ]
 }

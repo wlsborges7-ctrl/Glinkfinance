@@ -1,7 +1,7 @@
 {
   "name": "glinkfinance-mvp",
-  "version": "0.4.0",
-  "description": "MVP do GlinkFinance - gestão financeira para ISPs com dashboard compacto, gráficos, lançamentos, rateios, parametrização, reservas e empréstimos.",
+  "version": "0.6.0",
+  "description": "MVP do GlinkFinance - gestão financeira para ISPs com login, usuários, dados sensíveis, filtros, rateios, gráficos e visual executivo.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
